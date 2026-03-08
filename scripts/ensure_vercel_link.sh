@@ -3,6 +3,7 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT_FILE="$PROJECT_ROOT/.vercel/project.json"
 
 if [ -z "${VERCEL_TOKEN:-}" ]; then
   cat >&2 <<'EOF'
@@ -14,6 +15,21 @@ Create a Personal Token in Vercel, then add it to your shell environment:
 Optionally persist it in ~/.zshrc before running deploy scripts again.
 EOF
   exit 1
+fi
+
+if [ -f "$PROJECT_FILE" ] && grep -q "\"projectId\"" "$PROJECT_FILE"; then
+  EXISTING_PROJECT_SLUG="$(python3 - <<'PY'
+import json
+from pathlib import Path
+
+payload = json.loads(Path(".vercel/project.json").read_text(encoding="utf-8"))
+print(payload.get("projectName") or "")
+PY
+)"
+  if [ -n "$EXISTING_PROJECT_SLUG" ] && { [ -z "${VERCEL_PROJECT_SLUG:-}" ] || [ "$EXISTING_PROJECT_SLUG" = "${VERCEL_PROJECT_SLUG:-}" ]; }; then
+    echo "Vercel project already linked to $EXISTING_PROJECT_SLUG" >&2
+    exit 0
+  fi
 fi
 
 if [ -z "${VERCEL_PROJECT_SLUG:-}" ] || [ -z "${VERCEL_SCOPE_SLUG:-}" ]; then
@@ -29,8 +45,6 @@ fi
 
 PROJECT_SLUG="$VERCEL_PROJECT_SLUG"
 SCOPE_SLUG="$VERCEL_SCOPE_SLUG"
-
-PROJECT_FILE="$PROJECT_ROOT/.vercel/project.json"
 
 if [ -f "$PROJECT_FILE" ] && grep -q "\"projectId\"" "$PROJECT_FILE"; then
   if grep -q "\"projectName\": \"$PROJECT_SLUG\"" "$PROJECT_FILE"; then
