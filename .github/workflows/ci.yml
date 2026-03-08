@@ -31,8 +31,9 @@ jobs:
         with:
           python-version: "3.11"
           activate-environment: dl
-          auto-activate-base: false
+          auto-activate: false
           channels: conda-forge
+          conda-remove-defaults: true
 
       - name: Install dependencies
         run: npm ci
