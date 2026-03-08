@@ -19,12 +19,12 @@ const scriptPath = path.join(
 );
 
 const result = spawnSync(process.execPath, [scriptPath, canonicalUrl], {
-  stdio: "inherit",
-  env: {
-    ...process.env,
-    POLITICLEAR_EXPECT_RELEASE_STAGE:
-      process.env.POLITICLEAR_EXPECT_RELEASE_STAGE || "public-beta",
-  },
-});
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      POLITICLEAR_EXPECT_RELEASE_STAGE:
+        process.env.POLITICLEAR_EXPECT_RELEASE_STAGE || "live",
+    },
+  });
 
 process.exit(result.status || 0);

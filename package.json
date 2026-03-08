@@ -21,9 +21,11 @@
     "validate:release:ui": "node scripts/validate_release_ui.mjs",
     "validate:preview": "node scripts/validate_preview.mjs",
     "validate:canonical": "node scripts/validate_canonical.mjs",
-    "deploy:preview": "bash scripts/deploy_latest_preview.sh",
-    "deploy:preview:fresh-data": "bash scripts/deploy_latest_preview.sh",
-    "deploy:preview:quick": "PREVIEW_SKIP_DATA_REFRESH=1 bash scripts/deploy_latest_preview.sh",
+    "deploy:live": "bash scripts/deploy_latest_preview.sh",
+    "deploy:live:fresh-data": "bash scripts/deploy_latest_preview.sh",
+    "deploy:preview": "POLITICLEAR_EXPECT_CANONICAL_STAGE=public-beta POLITICLEAR_EXPECT_DEPLOY_STAGE=public-beta bash scripts/deploy_latest_preview.sh",
+    "deploy:preview:fresh-data": "POLITICLEAR_EXPECT_CANONICAL_STAGE=public-beta POLITICLEAR_EXPECT_DEPLOY_STAGE=public-beta bash scripts/deploy_latest_preview.sh",
+    "deploy:preview:quick": "POLITICLEAR_EXPECT_CANONICAL_STAGE=public-beta POLITICLEAR_EXPECT_DEPLOY_STAGE=public-beta PREVIEW_SKIP_DATA_REFRESH=1 bash scripts/deploy_latest_preview.sh",
     "deploy:preview:claimable": "bash scripts/deploy_claimable_preview.sh"
   },
   "dependencies": {

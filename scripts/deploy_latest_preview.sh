@@ -63,18 +63,18 @@ DEPLOYMENT_URL="$(printf '%s\n' "$DEPLOY_OUTPUT" | grep -Eo 'https://[^ ]+\.verc
 
 if [ -n "$DEPLOYMENT_URL" ]; then
   echo "Running API/data gate for deployment URL $DEPLOYMENT_URL ..." >&2
-  POLITICLEAR_EXPECT_RELEASE_STAGE="${POLITICLEAR_EXPECT_DEPLOY_STAGE:-public-beta}" \
+  POLITICLEAR_EXPECT_RELEASE_STAGE="${POLITICLEAR_EXPECT_DEPLOY_STAGE:-live}" \
     node "$PROJECT_ROOT/scripts/validate_release_api.mjs" "$DEPLOYMENT_URL" >&2
   echo "Running browser smoke gate for deployment URL $DEPLOYMENT_URL ..." >&2
-  POLITICLEAR_EXPECT_RELEASE_STAGE="${POLITICLEAR_EXPECT_DEPLOY_STAGE:-public-beta}" \
+  POLITICLEAR_EXPECT_RELEASE_STAGE="${POLITICLEAR_EXPECT_DEPLOY_STAGE:-live}" \
     node "$PROJECT_ROOT/scripts/validate_release_ui.mjs" "$DEPLOYMENT_URL" >&2
 fi
 
 echo "Running API/data gate for canonical URL $CANONICAL_URL ..." >&2
-POLITICLEAR_EXPECT_RELEASE_STAGE="${POLITICLEAR_EXPECT_CANONICAL_STAGE:-public-beta}" \
+POLITICLEAR_EXPECT_RELEASE_STAGE="${POLITICLEAR_EXPECT_CANONICAL_STAGE:-live}" \
   node "$PROJECT_ROOT/scripts/validate_release_api.mjs" "$CANONICAL_URL" >&2
 echo "Running browser smoke gate for canonical URL $CANONICAL_URL ..." >&2
-POLITICLEAR_EXPECT_RELEASE_STAGE="${POLITICLEAR_EXPECT_CANONICAL_STAGE:-public-beta}" \
+POLITICLEAR_EXPECT_RELEASE_STAGE="${POLITICLEAR_EXPECT_CANONICAL_STAGE:-live}" \
   node "$PROJECT_ROOT/scripts/validate_release_ui.mjs" "$CANONICAL_URL" >&2
 
 node -e '

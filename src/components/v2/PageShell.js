@@ -87,9 +87,9 @@ export default function PageShell({
             />
           </View>
           <Text style={styles.releaseRule}>
-            Politiclear is currently a public beta for an independent civic information service,
-            not an official state site. Confirm constituency, registration, and ballot guidance
-            with the linked official sources before acting.
+            {dataState.releaseStage === "live"
+              ? "Politiclear is an independent civic information service, not an official state site. Confirm constituency, registration, and ballot guidance with the linked official sources before acting."
+              : "Politiclear is currently a public beta for an independent civic information service, not an official state site. Confirm constituency, registration, and ballot guidance with the linked official sources before acting."}
           </Text>
           <Text style={styles.lookupText}>{lookupCaveat}</Text>
           <Text style={styles.lookupText}>

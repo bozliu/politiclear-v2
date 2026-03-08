@@ -3,6 +3,7 @@
 import html
 import json
 import re
+import shutil
 import subprocess
 import time
 import tempfile
@@ -12,8 +13,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
-
-from pypdf import PdfReader
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_DIR = ROOT / "data" / "generated"
@@ -695,17 +694,21 @@ def fetch_general_election_results_text():
 
     try:
         curl_file(GENERAL_ELECTION_RESULTS_PDF_URL, temp_path)
-        try:
-            result = subprocess.run(
-                ["pdftotext", "-layout", str(temp_path), "-"],
-                check=True,
-                capture_output=True,
-                text=True,
+        pdftotext_path = shutil.which("pdftotext")
+        if not pdftotext_path:
+            raise RuntimeError(
+                "pdftotext is required for deterministic election-candidate parsing. "
+                "Install Poppler (for example `brew install poppler` or "
+                "`sudo apt-get install poppler-utils`) before running the ingest."
             )
-            return result.stdout
-        except (FileNotFoundError, subprocess.CalledProcessError):
-            reader = PdfReader(str(temp_path))
-            return "\n".join(page.extract_text() or "" for page in reader.pages)
+
+        result = subprocess.run(
+            [pdftotext_path, "-layout", str(temp_path), "-"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout
     finally:
         temp_path.unlink(missing_ok=True)
 

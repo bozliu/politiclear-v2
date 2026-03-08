@@ -2,15 +2,15 @@
 
 Politiclear V2 is an evidence-first civic information app for Ireland. It helps a voter move from "What constituency am I in?" to "Who is on my ballot, what evidence is attached to these profiles, and which official sources should I check before acting?"
 
-This repo is the 2026 continuation of the 2024 Hack Trinity prototype from [ParadauxIO/politiclear-app](https://github.com/ParadauxIO/politiclear-app). The current public beta is deployed at [https://skill-deploy-017ji4k0pl.vercel.app](https://skill-deploy-017ji4k0pl.vercel.app).
+This repo is the 2026 continuation of the 2024 Hack Trinity prototype from [ParadauxIO/politiclear-app](https://github.com/ParadauxIO/politiclear-app). The public release is deployed at [https://skill-deploy-017ji4k0pl.vercel.app](https://skill-deploy-017ji4k0pl.vercel.app).
 
-## Public Beta Status
+## Public Release Status
 
-Politiclear V2 is a `public beta`, not a full public launch.
+Politiclear V2 is now prepared to ship as a public-facing civic information service.
 
-- The fixed Vercel deployment is the right public testing surface for now.
+- The fixed Vercel deployment is the canonical public release surface.
 - The app depends on API routes, candidate-image proxying, runtime bundle checks, and source-linked civic data, so GitHub Pages is not an appropriate host.
-- Release promotion should only happen after the canonical deployment passes both repo gates and live-site gates as a `live` release.
+- Release health should stay gated by bundle verification, canonical validation, and the daily refresh workflow.
 
 ## Why It Matters
 
@@ -70,7 +70,7 @@ This v2 continuation focuses on turning the original concept into a more credibl
 - Explicit source policy, methodology, corrections, privacy, and limitations pages inside the app.
 - Constituency lookup honesty: exact name matches, locality best matches, and routing-key Eircode handling are distinguished instead of being presented as fake certainty.
 - Local ballot context that combines current representatives, ballot-only candidates, and official next-step links.
-- Public-beta release posture that keeps trust and transparency visible instead of pretending the product is already a finished civic authority.
+- Public release posture that keeps trust and transparency visible instead of pretending the product is an official civic authority.
 
 ## Screenshots
 
@@ -92,7 +92,7 @@ flowchart LR
   C --> E["Node API / Vercel functions"]
   D --> E
   E --> F["Expo web app"]
-  F --> G["Public beta on fixed Vercel URL"]
+  F --> G["Public release on fixed Vercel URL"]
   G --> H["GitHub Issues feedback loop"]
 ```
 
@@ -111,6 +111,7 @@ flowchart LR
 - Node.js 20+
 - npm
 - Conda with an environment named `dl`
+- `pdftotext` from Poppler for deterministic ballot-PDF parsing
 
 ### Common commands
 
@@ -132,9 +133,15 @@ npm run sync:boundaries
 npm run prepare:data
 ```
 
+For local refreshes, install Poppler first if `pdftotext` is not already available:
+
+```bash
+brew install poppler
+```
+
 ## Deployment
 
-### Public beta deployment
+### Public release deployment
 
 Use Vercel Hobby with the fixed deployment URL. Do not migrate this app to a static host.
 
@@ -150,7 +157,7 @@ export VERCEL_TOKEN="your-token"
 Then run:
 
 ```bash
-npm run deploy:preview
+npm run deploy:live
 ```
 
 ### Validation
@@ -160,13 +167,13 @@ npm run verify:bundle
 VERCEL_CANONICAL_URL=https://skill-deploy-017ji4k0pl.vercel.app npm run validate:canonical
 ```
 
-The canonical validation currently targets `public-beta` expectations. A future full public launch should switch the canonical deployment and validation flow to `live`.
+The canonical validation targets the `live` release path. Use the `deploy:preview*` scripts only when you intentionally want a public-beta-style dry run.
 
 ## CI and Governance
 
 - PR/push CI builds the web app, starts a local API, serves the exported site, and runs API/UI validation.
 - Daily refresh can rebuild the official bundle and optionally deploy to the fixed Vercel URL when repo secrets and vars are configured.
-- Public beta issue templates are included for bug reports and tester feedback.
+- Public issue templates are included for bug reports and tester feedback.
 
 ## Public Feedback
 
@@ -176,7 +183,7 @@ The canonical validation currently targets `public-beta` expectations. A future 
 
 ## Rights and Release Strategy
 
-- This repo should stay private until written consent is collected from all co-owners for the final public source license.
-- The public beta demo can stay live on Vercel while source release remains private.
-- The intended future public-code posture is source-available and non-commercial by default, with commercial licensing handled separately.
+- This repo is public for inspection, feedback, and release transparency.
+- No open-source license is granted here yet; rights remain reserved unless separately granted in writing.
+- Separate commercial licensing may be offered by Boz Liu for approved use cases.
 - See [CREDITS.md](./CREDITS.md) for project attribution and [COMMERCIAL-LICENSE.md](./COMMERCIAL-LICENSE.md) for the planned commercial-use position.

@@ -1,6 +1,6 @@
 # Feedback Guide
 
-Politiclear V2 is in public beta. The most useful feedback is concrete, source-linked, and reproducible.
+Politiclear V2 is public-facing. The most useful feedback is concrete, source-linked, and reproducible.
 
 ## Use GitHub Issues For
 
