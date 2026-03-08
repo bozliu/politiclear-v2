@@ -328,33 +328,38 @@ async function validateUiOnce() {
 
     const finderInput = page.getByLabel("Search constituency, town, or routing-key Eircode");
     await finderInput.fill("Dublin Bay South");
-    await page.waitForFunction(() => {
-      const text = document.body?.innerText || "";
-      return (
-        text.includes("Dublin Bay South") &&
-        text.includes("Official Equivalent") &&
-        text.includes("Exact Term")
-      );
-    }, { timeout: 15000 });
+    await page.getByText("Exact match").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await page.getByText("Official Equivalent").first().waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
 
     await finderInput.fill("D04");
-    await page.waitForFunction(() => {
-      const text = document.body?.innerText || "";
-      return (
-        text.includes("Routing-key match") &&
-        text.includes("Dublin Bay South") &&
-        text.includes("Applied automatically from routing-key.")
-      );
-    }, { timeout: 15000 });
+    await page.getByText("Routing-key match").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await page.getByText("Applied automatically from routing-key.").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await page.getByText("Routing Key:D04").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
 
     await finderInput.fill("12 Main Street Dublin");
-    await page.waitForFunction(() => {
-      const text = document.body?.innerText || "";
-      return (
-        text.includes("Official handoff") &&
-        text.includes("Use the official tool for full address lookup")
-      );
-    }, { timeout: 15000 });
+    await page.getByText("Official handoff").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await page.getByText("Use official lookup").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
 
     const finalBodyText = await page.locator("body").innerText();
     if (finalBodyText.includes("Politiclear brief")) {
