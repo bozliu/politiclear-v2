@@ -1,6 +1,6 @@
 import { ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { palette, radii, spacing, typography } from "../../theme/tokens";
 import ActionButton from "./ActionButton";
 import TagPill from "./TagPill";
@@ -13,10 +13,12 @@ export default function PageShell({
   eyebrow,
   children,
   footer,
+  stickyFooter,
   actionLabel,
   onActionPress,
 }) {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const { clearOperationalNotice, dataState, lookupPrecisionCapabilities, operationalNotice } =
     usePoliticlear();
   const statusLabel =
@@ -51,13 +53,20 @@ export default function PageShell({
     { label: "Report an issue", pageId: PUBLIC_BETA_PAGE_IDS.reportProblem },
   ];
   const monitoringSummary = dataState.monitoring || null;
+  const stickyFooterPadding = stickyFooter ? 260 + insets.bottom : spacing.xl;
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.backgroundShapeTop} />
       <View style={styles.backgroundShapeBottom} />
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: stickyFooterPadding },
+        ]}
+      >
         <View style={styles.heroCard}>
           <View style={styles.heroAccentLine} />
           {actionLabel && onActionPress ? (
@@ -144,6 +153,17 @@ export default function PageShell({
         </View>
         {footer ? <View style={styles.footer}>{footer}</View> : null}
       </ScrollView>
+      {stickyFooter ? (
+        <View
+          pointerEvents="box-none"
+          style={[
+            styles.stickyFooterShell,
+            { bottom: Math.max(insets.bottom, spacing.sm) },
+          ]}
+        >
+          {stickyFooter}
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -180,7 +200,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.md,
-    paddingBottom: spacing.xl,
   },
   heroCard: {
     backgroundColor: palette.surfaceRaised,
@@ -301,5 +320,10 @@ const styles = StyleSheet.create({
   },
   footer: {
     marginTop: spacing.md,
+  },
+  stickyFooterShell: {
+    left: spacing.md,
+    position: "absolute",
+    right: spacing.md,
   },
 });

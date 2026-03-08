@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import ActionButton from "../../components/v2/ActionButton";
 import CandidateAvatar from "../../components/v2/CandidateAvatar";
+import CompareTray from "../../components/v2/CompareTray";
 import PageShell from "../../components/v2/PageShell";
 import SectionCard from "../../components/v2/SectionCard";
 import SourceList from "../../components/v2/SourceList";
@@ -43,6 +44,9 @@ export default function CandidateDetailScreen({ route, navigation }) {
   const {
     candidateDetailStatusById,
     compareCandidateIds,
+    compareCandidates,
+    compareLimit,
+    canAddCompareCandidate,
     getCandidateById,
     loadCandidateDetail,
     reportExternalLinkError,
@@ -82,6 +86,9 @@ export default function CandidateDetailScreen({ route, navigation }) {
   ];
   const groupedSources = groupSourcesByType(candidate.sources || []);
   const summaryBasisMeta = `Updated ${candidate.lastUpdated} · ${candidate.sourceCount || candidate.sources?.length || 0} attached sources`;
+  const compareKey = candidate.compareKey || candidate.id;
+  const isCompared = compareCandidateIds.includes(compareKey);
+  const canAddToCompare = canAddCompareCandidate(compareKey);
 
   return (
     <PageShell
@@ -89,6 +96,14 @@ export default function CandidateDetailScreen({ route, navigation }) {
       onActionPress={() => navigation.goBack()}
       eyebrow="Profile"
       title={candidate.name}
+      stickyFooter={
+        <CompareTray
+          candidates={compareCandidates}
+          compareLimit={compareLimit}
+          onOpenCompare={() => navigation.navigate("CandidateCompare")}
+          onRemoveCandidate={toggleCompareCandidate}
+        />
+      }
       subtitle={
         isElectionCandidate
           ? `${candidate.party} · ${candidate.constituencyName} · ${candidate.electedLabel || "2024 ballot candidate"} · Updated ${candidate.lastUpdated}`
@@ -199,23 +214,25 @@ export default function CandidateDetailScreen({ route, navigation }) {
         <View style={styles.buttonStack}>
           <ActionButton
             label={
-              compareCandidateIds.includes(candidate.compareKey || candidate.id)
+              isCompared
                 ? "Remove from compare"
-                : "Add to compare"
+                : canAddToCompare
+                  ? "Add to compare"
+                  : "Compare full"
             }
-            onPress={() => toggleCompareCandidate(candidate.compareKey || candidate.id)}
-            tone={
-              compareCandidateIds.includes(candidate.compareKey || candidate.id)
-                ? "secondary"
-                : "primary"
+            onPress={() => toggleCompareCandidate(compareKey)}
+            tone={isCompared ? "secondary" : "accent"}
+            disabled={!canAddToCompare && !isCompared}
+            accessibilityLabel={
+              !canAddToCompare && !isCompared
+                ? `Compare full. Remove one selected profile before adding ${candidate.name}`
+                : undefined
             }
-          />
-          <ActionButton
-            label="Open compare matrix"
-            onPress={() => navigation.navigate("CandidateCompare")}
-            tone="secondary"
           />
         </View>
+        {!canAddToCompare && !isCompared ? (
+          <Text style={styles.compareHint}>Remove one selected profile to add another.</Text>
+        ) : null}
       </SectionCard>
 
       <SectionCard
@@ -422,6 +439,12 @@ const styles = StyleSheet.create({
   },
   buttonStack: {
     gap: spacing.sm,
+  },
+  compareHint: {
+    color: palette.inkMuted,
+    fontSize: typography.caption,
+    lineHeight: 18,
+    marginTop: spacing.xs,
   },
   heroSources: {
     marginTop: spacing.md,

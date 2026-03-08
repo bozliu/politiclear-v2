@@ -23,6 +23,7 @@ import {
 } from "../services/politiclearRepository";
 
 const PoliticlearContext = createContext(null);
+const COMPARE_LIMIT = 4;
 
 export function PoliticlearProvider({ children }) {
   const fallbackDataset = useMemo(() => createFallbackDataset(), []);
@@ -169,8 +170,8 @@ export function PoliticlearProvider({ children }) {
         return currentIds.filter((id) => id !== candidateId);
       }
 
-      if (currentIds.length >= 4) {
-        return [...currentIds.slice(1), candidateId];
+      if (currentIds.length >= COMPARE_LIMIT) {
+        return currentIds;
       }
 
       return [...currentIds, candidateId];
@@ -180,8 +181,10 @@ export function PoliticlearProvider({ children }) {
   const clearCompareCandidates = () => setCompareCandidateIds([]);
 
   const setCompareCandidates = (candidateIds) => {
-    setCompareCandidateIds(candidateIds.slice(0, 4));
+    setCompareCandidateIds(candidateIds.slice(0, COMPARE_LIMIT));
   };
+
+  const isCompareFull = compareCandidateIds.length >= COMPARE_LIMIT;
 
   const loadCandidateDetail = async (candidateId) => {
     const baseCandidate = getCandidateByIdFromDataset(dataset, candidateId);
@@ -313,7 +316,11 @@ export function PoliticlearProvider({ children }) {
       checklistSections: dataset.checklistSections,
       clearCompareCandidates,
       compareCandidateIds,
+      compareLimit: COMPARE_LIMIT,
       compareCandidates,
+      isCompareFull,
+      canAddCompareCandidate: (candidateId) =>
+        compareCandidateIds.includes(candidateId) || compareCandidateIds.length < COMPARE_LIMIT,
       constituencies: dataset.constituencies,
       dataState,
       eligibilityFlow: dataset.eligibilityFlow,
@@ -366,6 +373,7 @@ export function PoliticlearProvider({ children }) {
       candidateDetailsById,
       compareCandidateIds,
       compareCandidates,
+      isCompareFull,
       dataState,
       dataset,
       clearOperationalNotice,

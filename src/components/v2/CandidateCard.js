@@ -9,6 +9,9 @@ export default function CandidateCard({
   onOpen,
   onToggleCompare,
   isCompared = false,
+  compareButtonLabel,
+  compareButtonDisabled = false,
+  compareHelperText = null,
 }) {
   const isElectionCandidate = candidate.profileKind === "electionCandidate";
   const badgeLabel =
@@ -100,18 +103,20 @@ export default function CandidateCard({
       </View>
 
       <View style={styles.actionRow}>
-        <Pressable onPress={onOpen} style={({ pressed }) => [styles.linkButton, pressed && styles.pressed]}>
-          <Text style={styles.linkLabel}>Open profile</Text>
-        </Pressable>
         {onToggleCompare ? (
           <ActionButton
             compact
-            label={isCompared ? "Remove from compare" : "Add to compare"}
+            label={compareButtonLabel || (isCompared ? "Remove from compare" : "Add to compare")}
             onPress={onToggleCompare}
-            tone={isCompared ? "secondary" : "primary"}
+            tone={isCompared ? "secondary" : "accent"}
+            disabled={compareButtonDisabled}
           />
         ) : null}
+        <Pressable onPress={onOpen} style={({ pressed }) => [styles.linkButton, pressed && styles.pressed]}>
+          <Text style={styles.linkLabel}>Open profile</Text>
+        </Pressable>
       </View>
+      {compareHelperText ? <Text style={styles.compareHelper}>{compareHelperText}</Text> : null}
     </View>
   );
 }
@@ -241,10 +246,17 @@ const styles = StyleSheet.create({
   actionRow: {
     alignItems: "center",
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
     justifyContent: "space-between",
   },
+  compareHelper: {
+    color: palette.inkMuted,
+    fontSize: typography.caption,
+    lineHeight: 18,
+    marginTop: spacing.xs,
+  },
   linkButton: {
-    marginRight: spacing.md,
     paddingVertical: spacing.xs,
   },
   linkLabel: {

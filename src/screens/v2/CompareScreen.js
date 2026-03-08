@@ -12,6 +12,8 @@ export default function CompareScreen({ navigation }) {
   const {
     clearCompareCandidates,
     compareCandidateIds,
+    compareLimit,
+    canAddCompareCandidate,
     getCandidatesForConstituency,
     getCompareCandidates,
     getElectionCandidatesForConstituency,
@@ -37,7 +39,11 @@ export default function CompareScreen({ navigation }) {
       <SectionCard
         eyebrow="Current compare set"
         title={`${compareSet.candidates.length} profiles selected`}
-        description="The compare view is source-linked by design. It will show official ballot-record coverage and visible unknowns instead of inventing certainty."
+        description={
+          compareCandidateIds.length >= compareLimit
+            ? "All compare slots are filled. Remove one selected profile before adding another."
+            : "The compare view is source-linked by design. It will show official ballot-record coverage and visible unknowns instead of inventing certainty."
+        }
         tone="warning"
       >
         <View style={styles.selectedRow}>
@@ -96,13 +102,19 @@ export default function CompareScreen({ navigation }) {
               label={
                 compareCandidateIds.includes(candidate.compareKey || candidate.id)
                   ? "Remove"
-                  : "Add"
+                  : canAddCompareCandidate(candidate.compareKey || candidate.id)
+                    ? "Add"
+                    : "Compare full"
               }
               onPress={() => toggleCompareCandidate(candidate.compareKey || candidate.id)}
               tone={
                 compareCandidateIds.includes(candidate.compareKey || candidate.id)
                   ? "secondary"
-                  : "primary"
+                  : "accent"
+              }
+              disabled={
+                !canAddCompareCandidate(candidate.compareKey || candidate.id) &&
+                !compareCandidateIds.includes(candidate.compareKey || candidate.id)
               }
             />
           </View>

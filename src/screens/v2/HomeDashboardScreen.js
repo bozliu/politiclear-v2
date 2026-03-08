@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import CandidateAvatar from "../../components/v2/CandidateAvatar";
+import CompareTray from "../../components/v2/CompareTray";
 import ConstituencyBoundaryMap from "../../components/v2/ConstituencyBoundaryMap";
 import ConstituencyFinderCard from "../../components/v2/ConstituencyFinderCard";
 import PageShell from "../../components/v2/PageShell";
@@ -15,6 +16,9 @@ export default function HomeDashboardScreen({ navigation }) {
   const {
     checklistSections,
     compareCandidateIds,
+    compareCandidates,
+    compareLimit,
+    canAddCompareCandidate,
     constituencies,
     findConstituencies,
     getCandidatesForConstituency,
@@ -26,7 +30,6 @@ export default function HomeDashboardScreen({ navigation }) {
     reportExternalLinkError,
     selectedConstituency,
     selectConstituency,
-    setCompareCandidates,
     toggleCompareCandidate,
   } = usePoliticlear();
 
@@ -47,23 +50,19 @@ export default function HomeDashboardScreen({ navigation }) {
   const heroResources = officialResources.slice(0, 4);
   const curatedUpdateCount = featuredUpdates.filter((update) => update.sourceType !== "official").length;
 
-  const openCompare = () => {
-    if (compareCandidateIds.length >= 2) {
-      navigation.navigate("CandidateCompare");
-      return;
-    }
-
-    setCompareCandidates(
-      localCandidates.slice(0, 2).map((candidate) => candidate.compareKey || candidate.id)
-    );
-    navigation.navigate("CandidateCompare");
-  };
-
   return (
     <PageShell
       eyebrow="Politiclear 2.0"
       title="Evidence first civic briefings"
       subtitle="Start with your constituency, review source-linked profiles, then compare local candidates without black-box scoring."
+      stickyFooter={
+        <CompareTray
+          candidates={compareCandidates}
+          compareLimit={compareLimit}
+          onOpenCompare={() => navigation.navigate("CandidateCompare")}
+          onRemoveCandidate={toggleCompareCandidate}
+        />
+      }
     >
       <View style={styles.topGrid}>
         <View style={styles.topGridPrimary}>
@@ -101,17 +100,27 @@ export default function HomeDashboardScreen({ navigation }) {
         description="These spotlight cards mix current TD evidence with ballot-only profiles, so the home screen reflects the actual local choice set."
       >
         <View style={styles.spotlightGrid}>
-          {spotlightProfiles.map((candidate) => (
-            <Pressable
-              key={candidate.id}
-              onPress={() =>
-                navigation.navigate("CandidateDetail", { candidateId: candidate.id })
-              }
-              style={({ pressed }) => [
-                styles.spotlightCard,
-                pressed && styles.pressed,
-              ]}
-            >
+          {spotlightProfiles.map((candidate) => {
+            const compareKey = candidate.compareKey || candidate.id;
+            const isCompared = compareCandidateIds.includes(compareKey);
+            const canAddToCompare = canAddCompareCandidate(compareKey);
+            const compareButtonLabel = isCompared
+              ? "Remove from compare"
+              : canAddToCompare
+                ? "Add to compare"
+                : "Compare full";
+
+            return (
+              <Pressable
+                key={candidate.id}
+                onPress={() =>
+                  navigation.navigate("CandidateDetail", { candidateId: candidate.id })
+                }
+                style={({ pressed }) => [
+                  styles.spotlightCard,
+                  pressed && styles.pressed,
+                ]}
+              >
               <View style={styles.spotlightHeader}>
                 <CandidateAvatar candidate={candidate} size={108} style={styles.spotlightAvatar} />
                 <View style={styles.spotlightCopy}>
@@ -151,29 +160,31 @@ export default function HomeDashboardScreen({ navigation }) {
               <View style={styles.spotlightActions}>
                 <ActionButton
                   compact
+                  label={compareButtonLabel}
+                  onPress={() => toggleCompareCandidate(compareKey)}
+                  tone={isCompared ? "secondary" : "accent"}
+                  disabled={!canAddToCompare && !isCompared}
+                  accessibilityLabel={
+                    !canAddToCompare && !isCompared
+                      ? `Compare full. Remove one profile before adding ${candidate.name}`
+                      : compareButtonLabel
+                  }
+                />
+                <ActionButton
+                  compact
                   label="Open profile"
                   onPress={() =>
                     navigation.navigate("CandidateDetail", { candidateId: candidate.id })
                   }
                   tone="secondary"
                 />
-                <ActionButton
-                  compact
-                  label={
-                    compareCandidateIds.includes(candidate.compareKey || candidate.id)
-                      ? "Remove from compare"
-                      : "Add to compare"
-                  }
-                  onPress={() => toggleCompareCandidate(candidate.compareKey || candidate.id)}
-                  tone={
-                    compareCandidateIds.includes(candidate.compareKey || candidate.id)
-                      ? "secondary"
-                      : "primary"
-                  }
-                />
               </View>
+              {!canAddToCompare && !isCompared ? (
+                <Text style={styles.compareFullHint}>Remove one selected profile to add another.</Text>
+              ) : null}
             </Pressable>
-          ))}
+            );
+          })}
         </View>
       </SectionCard>
 
@@ -196,11 +207,6 @@ export default function HomeDashboardScreen({ navigation }) {
           <ActionButton
             label="Open My Area"
             onPress={() => navigation.navigate("My Area")}
-          />
-          <ActionButton
-            label="Compare local candidates"
-            onPress={openCompare}
-            tone="secondary"
           />
           <ActionButton
             compact
@@ -349,6 +355,12 @@ const styles = StyleSheet.create({
   },
   spotlightActions: {
     gap: spacing.sm,
+  },
+  compareFullHint: {
+    color: palette.inkMuted,
+    fontSize: typography.caption,
+    lineHeight: 18,
+    marginTop: spacing.xs,
   },
   updateCard: {
     borderBottomColor: palette.border,

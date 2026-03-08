@@ -7,20 +7,33 @@ export default function ActionButton({
   tone = "primary",
   compact = false,
   accessibilityLabel,
+  disabled = false,
+  fullWidth = false,
 }) {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
       accessibilityLabel={accessibilityLabel || label}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
         styles[tone],
         compact && styles.compact,
-        pressed && styles.pressed,
+        fullWidth && styles.fullWidth,
+        disabled && styles.disabled,
+        pressed && !disabled && styles.pressed,
       ]}
     >
-      <Text style={[styles.label, tone === "secondary" && styles.secondaryLabel]}>
+      <Text
+        style={[
+          styles.label,
+          tone === "secondary" && styles.secondaryLabel,
+          disabled && tone !== "secondary" && styles.disabledLabel,
+          disabled && tone === "secondary" && styles.secondaryDisabledLabel,
+        ]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -43,8 +56,14 @@ const styles = StyleSheet.create({
     minHeight: 40,
     paddingHorizontal: spacing.sm,
   },
+  fullWidth: {
+    width: "100%",
+  },
   primary: {
     backgroundColor: palette.civic,
+  },
+  accent: {
+    backgroundColor: palette.accent,
   },
   secondary: {
     backgroundColor: palette.surfaceRaised,
@@ -54,6 +73,10 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.85,
   },
+  disabled: {
+    opacity: 0.56,
+    shadowOpacity: 0,
+  },
   label: {
     color: "#ffffff",
     fontSize: typography.body,
@@ -61,5 +84,11 @@ const styles = StyleSheet.create({
   },
   secondaryLabel: {
     color: palette.ink,
+  },
+  secondaryDisabledLabel: {
+    color: palette.inkMuted,
+  },
+  disabledLabel: {
+    color: "rgba(255,255,255,0.86)",
   },
 });

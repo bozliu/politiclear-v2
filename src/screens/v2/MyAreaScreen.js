@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import CandidateCard from "../../components/v2/CandidateCard";
+import CompareTray from "../../components/v2/CompareTray";
 import ConstituencyBoundaryMap from "../../components/v2/ConstituencyBoundaryMap";
 import PageShell from "../../components/v2/PageShell";
 import SectionCard from "../../components/v2/SectionCard";
@@ -14,6 +15,9 @@ export default function MyAreaScreen({ navigation }) {
   const {
     checklistSections,
     compareCandidateIds,
+    compareCandidates,
+    compareLimit,
+    canAddCompareCandidate,
     constituencies,
     getCandidatesForConstituency,
     getElectionCandidatesForConstituency,
@@ -21,7 +25,6 @@ export default function MyAreaScreen({ navigation }) {
     reportExternalLinkError,
     selectedConstituency,
     selectConstituency,
-    setCompareCandidates,
     toggleCompareCandidate,
   } = usePoliticlear();
 
@@ -35,6 +38,14 @@ export default function MyAreaScreen({ navigation }) {
       eyebrow="My area"
       title={selectedConstituency.name}
       subtitle="Turn your constituency into a working shortlist: local issues, representative profiles, official tools, and practical voting tasks."
+      stickyFooter={
+        <CompareTray
+          candidates={compareCandidates}
+          compareLimit={compareLimit}
+          onOpenCompare={() => navigation.navigate("CandidateCompare")}
+          onRemoveCandidate={toggleCompareCandidate}
+        />
+      }
     >
       <SectionCard
         eyebrow="Constituency brief"
@@ -87,22 +98,8 @@ export default function MyAreaScreen({ navigation }) {
       >
         <View style={styles.comparePanel}>
           <Text style={styles.compareTitle}>
-            {compareCandidateIds.length} profiles ready to compare
+            {compareCandidateIds.length} profiles are selected. The sticky compare tray keeps the shortlist visible while you browse this area.
           </Text>
-          <ActionButton
-            compact
-            label="Open compare view"
-            onPress={() => {
-              if (compareCandidateIds.length < 2) {
-                setCompareCandidates(
-                  candidates.slice(0, 2).map((candidate) => candidate.compareKey || candidate.id)
-                );
-              }
-
-              navigation.navigate("CandidateCompare");
-            }}
-            tone="secondary"
-          />
         </View>
         {candidates.map((candidate) => (
           <CandidateCard
@@ -113,6 +110,23 @@ export default function MyAreaScreen({ navigation }) {
               navigation.navigate("CandidateDetail", { candidateId: candidate.id })
             }
             onToggleCompare={() => toggleCompareCandidate(candidate.compareKey || candidate.id)}
+            compareButtonDisabled={
+              !canAddCompareCandidate(candidate.compareKey || candidate.id) &&
+              !compareCandidateIds.includes(candidate.compareKey || candidate.id)
+            }
+            compareButtonLabel={
+              compareCandidateIds.includes(candidate.compareKey || candidate.id)
+                ? "Remove from compare"
+                : canAddCompareCandidate(candidate.compareKey || candidate.id)
+                  ? "Add to compare"
+                  : "Compare full"
+            }
+            compareHelperText={
+              !canAddCompareCandidate(candidate.compareKey || candidate.id) &&
+              !compareCandidateIds.includes(candidate.compareKey || candidate.id)
+                ? "Remove one selected profile to add another."
+                : null
+            }
           />
         ))}
       </SectionCard>
@@ -132,6 +146,23 @@ export default function MyAreaScreen({ navigation }) {
               navigation.navigate("CandidateDetail", { candidateId: candidate.id })
             }
             onToggleCompare={() => toggleCompareCandidate(candidate.compareKey || candidate.id)}
+            compareButtonDisabled={
+              !canAddCompareCandidate(candidate.compareKey || candidate.id) &&
+              !compareCandidateIds.includes(candidate.compareKey || candidate.id)
+            }
+            compareButtonLabel={
+              compareCandidateIds.includes(candidate.compareKey || candidate.id)
+                ? "Remove from compare"
+                : canAddCompareCandidate(candidate.compareKey || candidate.id)
+                  ? "Add to compare"
+                  : "Compare full"
+            }
+            compareHelperText={
+              !canAddCompareCandidate(candidate.compareKey || candidate.id) &&
+              !compareCandidateIds.includes(candidate.compareKey || candidate.id)
+                ? "Remove one selected profile to add another."
+                : null
+            }
           />
         ))}
       </SectionCard>

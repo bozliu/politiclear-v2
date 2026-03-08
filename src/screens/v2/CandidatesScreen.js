@@ -1,17 +1,19 @@
 import { useMemo, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import CandidateCard from "../../components/v2/CandidateCard";
+import CompareTray from "../../components/v2/CompareTray";
 import PageShell from "../../components/v2/PageShell";
 import SectionCard from "../../components/v2/SectionCard";
-import ActionButton from "../../components/v2/ActionButton";
 import { usePoliticlear } from "../../state/PoliticlearContext";
 import { palette, radii, spacing, typography } from "../../theme/tokens";
 
 export default function CandidatesScreen({ navigation }) {
   const [query, setQuery] = useState("");
   const {
-    clearCompareCandidates,
     compareCandidateIds,
+    compareCandidates,
+    compareLimit,
+    canAddCompareCandidate,
     getElectionCandidatesForConstituency,
     getCandidatesForConstituency,
     selectedConstituency,
@@ -60,6 +62,14 @@ export default function CandidatesScreen({ navigation }) {
       eyebrow="Representatives & Candidates"
       title={`Ballot coverage for ${selectedConstituency.name}`}
       subtitle="Browse the current TD layer and the full 2024 general election ballot in the same constituency context. Compare now supports mixed local profiles while keeping missing issue evidence explicit."
+      stickyFooter={
+        <CompareTray
+          candidates={compareCandidates}
+          compareLimit={compareLimit}
+          onOpenCompare={() => navigation.navigate("CandidateCompare")}
+          onRemoveCandidate={toggleCompareCandidate}
+        />
+      }
     >
       <SectionCard
         eyebrow="Filter"
@@ -80,22 +90,8 @@ export default function CandidatesScreen({ navigation }) {
               {compareCandidateIds.length} profiles in compare
             </Text>
             <Text style={styles.bannerText}>
-              Pick between two and four profiles for a source-linked issue matrix.
+              The sticky compare tray keeps your selected profiles visible while you browse the ballot.
             </Text>
-          </View>
-          <View style={styles.bannerActions}>
-            <ActionButton
-              compact
-              label="Open compare"
-              onPress={() => navigation.navigate("CandidateCompare")}
-              tone="secondary"
-            />
-            <ActionButton
-              compact
-              label="Clear"
-              onPress={clearCompareCandidates}
-              tone="secondary"
-            />
           </View>
         </View>
       </SectionCard>
@@ -114,6 +110,23 @@ export default function CandidatesScreen({ navigation }) {
               navigation.navigate("CandidateDetail", { candidateId: candidate.id })
             }
             onToggleCompare={() => toggleCompareCandidate(candidate.compareKey || candidate.id)}
+            compareButtonDisabled={
+              !canAddCompareCandidate(candidate.compareKey || candidate.id) &&
+              !compareCandidateIds.includes(candidate.compareKey || candidate.id)
+            }
+            compareButtonLabel={
+              compareCandidateIds.includes(candidate.compareKey || candidate.id)
+                ? "Remove from compare"
+                : canAddCompareCandidate(candidate.compareKey || candidate.id)
+                  ? "Add to compare"
+                  : "Compare full"
+            }
+            compareHelperText={
+              !canAddCompareCandidate(candidate.compareKey || candidate.id) &&
+              !compareCandidateIds.includes(candidate.compareKey || candidate.id)
+                ? "Remove one selected profile to add another."
+                : null
+            }
           />
         ))}
       </SectionCard>
@@ -132,6 +145,23 @@ export default function CandidatesScreen({ navigation }) {
             }
             isCompared={compareCandidateIds.includes(candidate.compareKey || candidate.id)}
             onToggleCompare={() => toggleCompareCandidate(candidate.compareKey || candidate.id)}
+            compareButtonDisabled={
+              !canAddCompareCandidate(candidate.compareKey || candidate.id) &&
+              !compareCandidateIds.includes(candidate.compareKey || candidate.id)
+            }
+            compareButtonLabel={
+              compareCandidateIds.includes(candidate.compareKey || candidate.id)
+                ? "Remove from compare"
+                : canAddCompareCandidate(candidate.compareKey || candidate.id)
+                  ? "Add to compare"
+                  : "Compare full"
+            }
+            compareHelperText={
+              !canAddCompareCandidate(candidate.compareKey || candidate.id) &&
+              !compareCandidateIds.includes(candidate.compareKey || candidate.id)
+                ? "Remove one selected profile to add another."
+                : null
+            }
           />
         ))}
       </SectionCard>
@@ -169,8 +199,5 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.78)",
     fontSize: typography.bodySmall,
     lineHeight: 20,
-  },
-  bannerActions: {
-    gap: spacing.sm,
   },
 });
