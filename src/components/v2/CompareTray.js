@@ -14,14 +14,14 @@ export default function CompareTray({
   }
 
   const selectedCount = candidates.length;
-  const remainingCount = Math.max(compareLimit - selectedCount, 0);
   const compareReady = selectedCount >= 2;
+  const remainingToStartCompare = Math.max(2 - selectedCount, 0);
   const helperText = compareReady
     ? "Open the side-by-side compare view and scan issue coverage, sourcing, and profile differences in one place."
-    : `Select ${remainingCount} more profile${remainingCount === 1 ? "" : "s"} to compare.`;
+    : `Select ${remainingToStartCompare} more profile${remainingToStartCompare === 1 ? "" : "s"} to compare.`;
   const ctaLabel = compareReady
     ? `Compare ${selectedCount} selected profiles`
-    : `Select ${remainingCount} more to compare`;
+    : `Select ${remainingToStartCompare} more to compare`;
 
   return (
     <View style={styles.shell}>

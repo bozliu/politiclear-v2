@@ -240,8 +240,9 @@ async function validateUiOnce() {
         const text = document.body?.innerText || "";
         return (
           text.includes("1/4") &&
-          (text.includes("Select 1 more profile to compare.") ||
-            text.includes("Select 1 more to compare"))
+          text.includes("Keep building your shortlist") &&
+          /Select \d+ more profile(?:s)? to compare\./.test(text) &&
+          /Select \d+ more to compare/.test(text)
         );
       }, { timeout: 15000 });
 
