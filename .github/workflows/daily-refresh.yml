@@ -1,0 +1,102 @@
+name: Daily Politiclear Refresh
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy refreshed data to the canonical Vercel app"
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  refresh-data:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Conda dl environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: "3.11"
+          activate-environment: dl
+          auto-activate-base: false
+          channels: conda-forge
+
+      - name: Install Python ingest dependencies
+        run: conda run -n dl python -m pip install pypdf
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Refresh and verify official data bundle
+        run: npm run prepare:data
+
+      - name: Build web preview bundle
+        run: npm run build:vercel
+
+      - name: Upload refreshed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: politiclear-refreshed-dist
+          path: |
+            data/generated
+            dist
+
+  deploy-refresh:
+    needs: refresh-data
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.deploy == true)
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Conda dl environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: "3.11"
+          activate-environment: dl
+          auto-activate-base: false
+          channels: conda-forge
+
+      - name: Install Python ingest dependencies
+        run: conda run -n dl python -m pip install pypdf
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy refreshed canonical preview
+        if: ${{ secrets.VERCEL_TOKEN != '' && vars.VERCEL_CANONICAL_URL != '' && vars.VERCEL_PROJECT_SLUG != '' && vars.VERCEL_SCOPE_SLUG != '' }}
+        env:
+          POLITICLEAR_EXPECT_CANONICAL_STAGE: public-beta
+          POLITICLEAR_EXPECT_DEPLOY_STAGE: public-beta
+          VERCEL_CANONICAL_URL: ${{ vars.VERCEL_CANONICAL_URL }}
+          VERCEL_PROJECT_SLUG: ${{ vars.VERCEL_PROJECT_SLUG }}
+          VERCEL_SCOPE_SLUG: ${{ vars.VERCEL_SCOPE_SLUG }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npm run deploy:preview:fresh-data
+
+      - name: Skip deploy when Vercel vars or token are missing
+        if: ${{ secrets.VERCEL_TOKEN == '' || vars.VERCEL_CANONICAL_URL == '' || vars.VERCEL_PROJECT_SLUG == '' || vars.VERCEL_SCOPE_SLUG == '' }}
+        run: echo "Vercel deployment variables are incomplete, so the workflow refreshed data and build artifacts only."

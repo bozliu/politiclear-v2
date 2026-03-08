@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Politiclear public beta feedback guide
+    url: https://github.com/bozliu/politiclear-v2/issues/new/choose
+    about: Use GitHub Issues for reproducible bugs, corrections, and public-beta feedback.

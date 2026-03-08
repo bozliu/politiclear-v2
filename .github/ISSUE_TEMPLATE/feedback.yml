@@ -1,0 +1,33 @@
+name: Public beta feedback
+description: Share product feedback, civic-data gaps, and release suggestions.
+title: "[Feedback]: "
+labels:
+  - feedback
+body:
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Feedback
+      description: Tell us what helped, what felt unclear, and what would make Politiclear more useful.
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feedback type
+      options:
+        - Civic clarity
+        - Data coverage
+        - Constituency lookup
+        - Candidate comparison
+        - Accessibility
+        - Performance
+        - Trust and transparency
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: page
+    attributes:
+      label: Relevant page or feature
+      description: Example: Home dashboard, Compare, News, Methodology.
