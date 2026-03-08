@@ -38,7 +38,7 @@ async function loadReleaseHome(page) {
   );
 }
 
-async function getPrimaryVerticalScroller(page) {
+async function getVerticalScrollers(page) {
   return page.evaluate(() => {
     return Array.from(document.querySelectorAll("*"))
       .map((element, index) => {
@@ -68,17 +68,14 @@ async function getPrimaryVerticalScroller(page) {
           rightOverflow - leftOverflow ||
           left.index - right.index
         );
-      })[0] || null;
+      });
   });
 }
 
 async function assertWheelScroll(page, label, locator = null) {
-  const before = await getPrimaryVerticalScroller(page);
-  if (!before) {
-    throw new Error(`${label} did not expose a vertically scrollable container`);
-  }
-
   let point = null;
+  let before = null;
+  let beforeMaxScrollTop = 0;
 
   if (locator) {
     const target = locator.first();
@@ -92,6 +89,28 @@ async function assertWheelScroll(page, label, locator = null) {
       x: box.x + Math.max(24, Math.min(box.width / 2, box.width - 24)),
       y: box.y + Math.max(24, Math.min(box.height / 2, box.height - 24)),
     };
+
+    before = await target.evaluate((element) => {
+      let current = element;
+      while (current) {
+        const style = getComputedStyle(current);
+        if (
+          (style.overflowY === "auto" || style.overflowY === "scroll") &&
+          current.clientHeight > 0 &&
+          current.scrollHeight > current.clientHeight + 20
+        ) {
+          current.setAttribute("data-scroll-probe", "active");
+          return {
+            clientHeight: current.clientHeight,
+            scrollHeight: current.scrollHeight,
+            scrollTop: current.scrollTop,
+          };
+        }
+        current = current.parentElement;
+      }
+      return null;
+    });
+    beforeMaxScrollTop = before?.scrollTop ?? 0;
   } else {
     const viewport = page.viewportSize();
     if (!viewport) {
@@ -102,25 +121,56 @@ async function assertWheelScroll(page, label, locator = null) {
       x: Math.round(viewport.width / 2),
       y: Math.round(viewport.height / 2),
     };
+
+    const beforeScrollers = await getVerticalScrollers(page);
+    if (!beforeScrollers.length) {
+      throw new Error(`${label} did not expose a vertically scrollable container`);
+    }
+    before = beforeScrollers[0];
+    beforeMaxScrollTop = Math.max(
+      ...beforeScrollers.map((entry) => entry.scrollTop)
+    );
+  }
+
+  if (!before) {
+    throw new Error(`${label} did not expose a vertically scrollable container`);
   }
 
   await page.mouse.move(point.x, point.y);
   await page.mouse.wheel(0, Math.max(800, Math.min(before.clientHeight, 1200)));
   await page.waitForTimeout(400);
 
-  const after = await getPrimaryVerticalScroller(page);
-  if (!after) {
+  const afterMaxScrollTop = locator
+    ? await page
+        .locator('[data-scroll-probe="active"]')
+        .evaluate((element) => {
+          const scrollTop = element.scrollTop;
+          element.removeAttribute("data-scroll-probe");
+          return scrollTop;
+        })
+        .catch(() => null)
+    : await (async () => {
+        const afterScrollers = await getVerticalScrollers(page);
+        if (!afterScrollers.length) {
+          return null;
+        }
+        return Math.max(...afterScrollers.map((entry) => entry.scrollTop));
+      })();
+
+  if (afterMaxScrollTop === null) {
     throw new Error(`${label} lost its vertical scroll container after wheel input`);
   }
 
-  if (after.scrollTop <= before.scrollTop) {
+  if (afterMaxScrollTop <= beforeMaxScrollTop) {
     throw new Error(`${label} did not respond to wheel scrolling`);
   }
 }
 
 async function validateUiOnce() {
   const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+  const page = await browser.newPage({
+    viewport: { width: 1440, height: 900 },
+  });
 
   try {
     await loadReleaseHome(page);
@@ -236,15 +286,18 @@ async function validateUiOnce() {
     const compareButtons = page.getByRole("button", { name: "Add to compare" });
     if ((await compareButtons.count()) >= 2) {
       await compareButtons.first().click();
-      await page.waitForFunction(() => {
-        const text = document.body?.innerText || "";
-        return (
-          text.includes("1/4") &&
-          text.includes("Keep building your shortlist") &&
-          /Select \d+ more profile(?:s)? to compare\./.test(text) &&
-          /Select \d+ more to compare/.test(text)
-        );
-      }, { timeout: 15000 });
+      await page.getByText("Keep building your shortlist").waitFor({
+        state: "visible",
+        timeout: 15000,
+      });
+      await page.getByText("1/4").waitFor({
+        state: "visible",
+        timeout: 15000,
+      });
+      await page.getByRole("button", { name: /Select \d+ more to compare/i }).waitFor({
+        state: "visible",
+        timeout: 15000,
+      });
 
       await page.getByRole("button", { name: "Add to compare" }).first().click();
       await page.getByRole("button", { name: /Compare 2 selected profiles/i }).click();
@@ -277,16 +330,20 @@ async function validateUiOnce() {
     await finderInput.fill("Dublin Bay South");
     await page.waitForFunction(() => {
       const text = document.body?.innerText || "";
-      return text.includes("Official-equivalent: yes");
+      return (
+        text.includes("Dublin Bay South") &&
+        text.includes("Official Equivalent") &&
+        text.includes("Exact Term")
+      );
     }, { timeout: 15000 });
 
     await finderInput.fill("D04");
     await page.waitForFunction(() => {
       const text = document.body?.innerText || "";
       return (
-        text.includes("Routing-key Eircode match") &&
+        text.includes("Routing-key match") &&
         text.includes("Dublin Bay South") &&
-        text.includes("Auto-applied to your local ballot context")
+        text.includes("Applied automatically from routing-key.")
       );
     }, { timeout: 15000 });
 
