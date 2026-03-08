@@ -57,7 +57,7 @@ export default function PageShell({
       <StatusBar barStyle="dark-content" />
       <View style={styles.backgroundShapeTop} />
       <View style={styles.backgroundShapeBottom} />
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.heroCard}>
           <View style={styles.heroAccentLine} />
           {actionLabel && onActionPress ? (
@@ -152,6 +152,7 @@ const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: palette.background,
     flex: 1,
+    minHeight: 0,
   },
   backgroundShapeTop: {
     backgroundColor: palette.civicSoft,
@@ -172,6 +173,10 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: -10,
     width: 260,
+  },
+  scrollView: {
+    flex: 1,
+    minHeight: 0,
   },
   scrollContent: {
     padding: spacing.md,

@@ -19,24 +19,95 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function validateUiOnce() {
-  const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+async function loadReleaseHome(page) {
+  await page.goto(normalizedReleaseUrl, {
+    timeout: 30000,
+    waitUntil: "load",
+  });
 
-  try {
-    await page.goto(normalizedReleaseUrl, {
-      timeout: 30000,
-      waitUntil: "load",
-    });
-
-    await page.waitForFunction(() => {
+  await page.waitForFunction(
+    () => {
       const text = document.body?.innerText || "";
       return (
         text.includes("Bundled official snapshot") ||
         text.includes("Official sync") ||
         text.includes("Sample fallback")
       );
-    }, { timeout: 30000 });
+    },
+    { timeout: 30000 }
+  );
+}
+
+async function getPrimaryVerticalScroller(page) {
+  return page.evaluate(() => {
+    return Array.from(document.querySelectorAll("*"))
+      .map((element, index) => {
+        const style = getComputedStyle(element);
+        return {
+          className: typeof element.className === "string" ? element.className : "",
+          clientHeight: element.clientHeight,
+          index,
+          overflowY: style.overflowY,
+          scrollHeight: element.scrollHeight,
+          scrollTop: element.scrollTop,
+          tagName: element.tagName,
+        };
+      })
+      .filter(
+        (entry) =>
+          (entry.overflowY === "auto" || entry.overflowY === "scroll") &&
+          entry.clientHeight > 0 &&
+          entry.scrollHeight > entry.clientHeight + 20
+      )
+      .sort((left, right) => {
+        const leftOverflow = left.scrollHeight - left.clientHeight;
+        const rightOverflow = right.scrollHeight - right.clientHeight;
+
+        return (
+          right.clientHeight - left.clientHeight ||
+          rightOverflow - leftOverflow ||
+          left.index - right.index
+        );
+      })[0] || null;
+  });
+}
+
+async function assertWheelScroll(page, label, locator) {
+  const before = await getPrimaryVerticalScroller(page);
+  if (!before) {
+    throw new Error(`${label} did not expose a vertically scrollable container`);
+  }
+
+  const target = locator.first();
+  await target.waitFor({ state: "visible", timeout: 15000 });
+  const box = await target.boundingBox();
+  if (!box) {
+    throw new Error(`${label} did not expose a visible wheel target`);
+  }
+
+  await page.mouse.move(
+    box.x + Math.max(24, Math.min(box.width / 2, box.width - 24)),
+    box.y + Math.max(24, Math.min(box.height / 2, box.height - 24))
+  );
+  await page.mouse.wheel(0, Math.max(800, Math.min(before.clientHeight, 1200)));
+  await page.waitForTimeout(400);
+
+  const after = await getPrimaryVerticalScroller(page);
+  if (!after) {
+    throw new Error(`${label} lost its vertical scroll container after wheel input`);
+  }
+
+  if (after.scrollTop <= before.scrollTop) {
+    throw new Error(`${label} did not respond to wheel scrolling`);
+  }
+}
+
+async function validateUiOnce() {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+
+  try {
+    await loadReleaseHome(page);
 
     const bodyText = await page.locator("body").innerText();
 
@@ -103,43 +174,61 @@ async function validateUiOnce() {
       });
     }
 
-    await page.goto(normalizedReleaseUrl, {
-      timeout: 30000,
-      waitUntil: "load",
+    await page.getByRole("button", { name: "Open live map" }).click();
+    await page.waitForSelector("text=Tap a real constituency boundary", { timeout: 15000 });
+    await assertWheelScroll(
+      page,
+      "Constituency explorer",
+      page.getByText("Tap a real constituency boundary")
+    );
+
+    await loadReleaseHome(page);
+    const profileButtons = page.getByText("Open profile");
+    if ((await profileButtons.count()) < 1) {
+      throw new Error("Release did not expose a candidate profile entry point");
+    }
+
+    await profileButtons.first().click();
+    await page.waitForSelector("text=Questions & debates", {
+      timeout: 15000,
+    });
+    await page.waitForSelector("text=Votes & sources", {
+      timeout: 15000,
     });
 
-    const profileButtons = page.getByText("Open profile");
-    if ((await profileButtons.count()) > 0) {
-      await profileButtons.first().click();
-      await page.waitForSelector("text=Questions & debates", {
-        timeout: 15000,
-      });
-      await page.waitForSelector("text=Votes & sources", {
-        timeout: 15000,
-      });
-
-      const evidenceText = await page.locator("body").innerText();
-      if (
-        !evidenceText.includes("Official Oireachtas parliamentary question record.") &&
-        !evidenceText.includes("Official Oireachtas vote record.")
-      ) {
-        throw new Error("Candidate detail did not render linked evidence records");
-      }
-
-      if (!evidenceText.includes("Summary basis:")) {
-        throw new Error("Candidate detail did not render the summary basis disclosure");
-      }
+    const evidenceText = await page.locator("body").innerText();
+    if (
+      !evidenceText.includes("Official Oireachtas parliamentary question record.") &&
+      !evidenceText.includes("Official Oireachtas vote record.")
+    ) {
+      throw new Error("Candidate detail did not render linked evidence records");
     }
+
+    if (!evidenceText.includes("Summary basis:")) {
+      throw new Error("Candidate detail did not render the summary basis disclosure");
+    }
+
+    await assertWheelScroll(page, "Candidate detail", page.getByText("Decision card"));
 
     const methodologyButtons = page.getByText("Methodology");
     if ((await methodologyButtons.count()) < 1) {
       throw new Error("Release did not expose a methodology entry point");
     }
 
-    await page.goto(normalizedReleaseUrl, {
-      timeout: 30000,
-      waitUntil: "load",
-    });
+    await loadReleaseHome(page);
+
+    const compareButtons = page.getByRole("button", { name: "Add to compare" });
+    if ((await compareButtons.count()) >= 2) {
+      await compareButtons.first().click();
+      await page.getByRole("button", { name: "Add to compare" }).first().click();
+      await page.getByRole("button", { name: "Compare local candidates" }).click();
+      await page.waitForSelector("text=Issue matrix for", { timeout: 15000 });
+      await assertWheelScroll(page, "Compare screen", page.getByText("Housing"));
+    } else {
+      throw new Error("Release did not expose enough candidates for compare validation");
+    }
+
+    await loadReleaseHome(page);
 
     const finderInput = page.getByLabel("Search constituency, town, or routing-key Eircode");
     await finderInput.fill("Dublin Bay South");
