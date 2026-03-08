@@ -1,0 +1,16 @@
+{
+  "generatedAt": "2026-03-09",
+  "resolvedCount": 676,
+  "resolvedBySourceType": {
+    "media": 505,
+    "oireachtas": 171
+  },
+  "threshold": 0,
+  "totalCandidates": 676,
+  "unresolvedCandidates": [],
+  "unresolvedCount": 0,
+  "unresolvedByParty": {},
+  "mediaFallbackBreakdown": {
+    "thejournal.ie": 505
+  }
+}

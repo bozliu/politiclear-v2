@@ -114,8 +114,10 @@ async function sendCandidateImage(res, bootstrap, details, candidateId) {
 
     const imageUrl =
       detailCandidate?.sourceImageUrl ||
+      detailCandidate?.portraitSourceUrl ||
       detailCandidate?.imageUrl ||
       baseCandidate.sourceImageUrl ||
+      baseCandidate.portraitSourceUrl ||
       baseCandidate.imageUrl;
 
     if (!imageUrl) {
@@ -126,7 +128,12 @@ async function sendCandidateImage(res, bootstrap, details, candidateId) {
     const response = await fetch(imageUrl, {
       headers: {
         Accept: "image/*",
-        Referer: detailCandidate?.profileUrl || baseCandidate.profileUrl || "https://www.oireachtas.ie/",
+        Referer:
+          detailCandidate?.portraitSourcePageUrl ||
+          baseCandidate.portraitSourcePageUrl ||
+          detailCandidate?.profileUrl ||
+          baseCandidate.profileUrl ||
+          "https://www.oireachtas.ie/",
         "User-Agent": "PoliticlearPreview/2.0",
       },
     });

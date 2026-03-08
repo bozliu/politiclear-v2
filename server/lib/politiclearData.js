@@ -206,6 +206,45 @@ function mergeCandidateDetail(baseCandidate, detailCandidate) {
   merged.recentQuestions = merged.recentQuestions || [];
   merged.recentDebates = merged.recentDebates || [];
   merged.recentVotes = merged.recentVotes || [];
+  merged.sourceImageUrl =
+    detailCandidate?.sourceImageUrl ||
+    detailCandidate?.portraitSourceUrl ||
+    detailCandidate?.imageUrl ||
+    detailCandidate?.portraitPath ||
+    baseCandidate.sourceImageUrl ||
+    baseCandidate.portraitSourceUrl ||
+    baseCandidate.imageUrl ||
+    baseCandidate.portraitPath ||
+    null;
+  merged.portraitDeliveryMode =
+    detailCandidate?.portraitDeliveryMode ||
+    baseCandidate.portraitDeliveryMode ||
+    null;
+  merged.portraitPath =
+    detailCandidate?.portraitPath ||
+    baseCandidate.portraitPath ||
+    null;
+  merged.portraitResolutionState =
+    detailCandidate?.portraitResolutionState ||
+    baseCandidate.portraitResolutionState ||
+    "unresolved";
+  merged.portraitSourceDomain =
+    detailCandidate?.portraitSourceDomain ||
+    baseCandidate.portraitSourceDomain ||
+    null;
+  merged.portraitSourcePageUrl =
+    detailCandidate?.portraitSourcePageUrl ||
+    baseCandidate.portraitSourcePageUrl ||
+    null;
+  merged.portraitSourceType =
+    detailCandidate?.portraitSourceType ||
+    baseCandidate.portraitSourceType ||
+    null;
+  merged.portraitSourceUrl =
+    detailCandidate?.portraitSourceUrl ||
+    baseCandidate.portraitSourceUrl ||
+    merged.sourceImageUrl ||
+    null;
   merged.evidenceCounts = merged.evidenceCounts || {
     committees: merged.committees.length,
     offices: merged.offices.length,

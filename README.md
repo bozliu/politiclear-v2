@@ -1,8 +1,30 @@
 # Politiclear V2
 
-Politiclear V2 is an evidence-first civic information app for Ireland. It helps a voter move from "What constituency am I in?" to "Who is on my ballot, what evidence is attached to these profiles, and which official sources should I check before acting?"
+Politiclear V2 is an evidence-first civic information app for Ireland. It helps a voter move from "What constituency am I in?" to "Who is on my ballot, which local profiles should I compare, what evidence is attached to them, and which official sources should I check before acting?"
 
 This repo is the 2026 continuation of the 2024 Hack Trinity prototype from [ParadauxIO/politiclear-app](https://github.com/ParadauxIO/politiclear-app). The public release is deployed at [https://skill-deploy-017ji4k0pl.vercel.app](https://skill-deploy-017ji4k0pl.vercel.app).
+
+## See It In Action
+
+All three captures below were recorded from the canonical public release at [https://skill-deploy-017ji4k0pl.vercel.app](https://skill-deploy-017ji4k0pl.vercel.app), not from localhost.
+
+### Build a shortlist before you decide
+
+![Politiclear compare flow](./docs/readme-assets/compare-flow.gif)
+
+Build a local shortlist, keep the selected profiles visible, and open a side-by-side issue matrix with linked evidence and explicit unknowns.
+
+### Start from your real constituency, not a generic feed
+
+![Politiclear lookup and live map flow](./docs/readme-assets/lookup-map-flow.gif)
+
+The lookup flow distinguishes routing-key Eircodes from full address searches, syncs the live constituency map, and hands off exact address checks to the official tool instead of pretending certainty.
+
+### Open the evidence trail behind a profile
+
+![Politiclear evidence profile flow](./docs/readme-assets/evidence-profile-flow.gif)
+
+Profiles keep the source basis, issue rows, and primary links visible so a voter can inspect the public record instead of trusting a black-box score.
 
 ## Public Release Status
 
@@ -66,21 +88,11 @@ This v2 continuation focuses on turning the original concept into a more credibl
 
 ## What Makes Politiclear Different
 
-- Evidence-first candidate profiles instead of black-box scoring.
+- Compare-first shortlist flow with a sticky selected-profiles tray and a side-by-side issue matrix.
+- Constituency lookup honesty: exact matches, routing-key Eircodes, and official address handoffs are kept distinct instead of being presented as fake certainty.
+- Evidence-first profiles that keep source basis, issue rows, and primary links visible instead of hiding them behind black-box scoring.
 - Explicit source policy, methodology, corrections, privacy, and limitations pages inside the app.
-- Constituency lookup honesty: exact name matches, locality best matches, and routing-key Eircode handling are distinguished instead of being presented as fake certainty.
-- Local ballot context that combines current representatives, ballot-only candidates, and official next-step links.
 - Public release posture that keeps trust and transparency visible instead of pretending the product is an official civic authority.
-
-## Screenshots
-
-### Home dashboard
-
-![Politiclear home dashboard](./docs/screenshots/home-dashboard.png)
-
-### Candidate detail
-
-![Politiclear candidate detail](./docs/screenshots/candidate-detail.png)
 
 ## Runtime Overview
 

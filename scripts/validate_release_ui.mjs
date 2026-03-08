@@ -72,23 +72,39 @@ async function getPrimaryVerticalScroller(page) {
   });
 }
 
-async function assertWheelScroll(page, label, locator) {
+async function assertWheelScroll(page, label, locator = null) {
   const before = await getPrimaryVerticalScroller(page);
   if (!before) {
     throw new Error(`${label} did not expose a vertically scrollable container`);
   }
 
-  const target = locator.first();
-  await target.waitFor({ state: "visible", timeout: 15000 });
-  const box = await target.boundingBox();
-  if (!box) {
-    throw new Error(`${label} did not expose a visible wheel target`);
+  let point = null;
+
+  if (locator) {
+    const target = locator.first();
+    await target.waitFor({ state: "visible", timeout: 15000 });
+    const box = await target.boundingBox();
+    if (!box) {
+      throw new Error(`${label} did not expose a visible wheel target`);
+    }
+
+    point = {
+      x: box.x + Math.max(24, Math.min(box.width / 2, box.width - 24)),
+      y: box.y + Math.max(24, Math.min(box.height / 2, box.height - 24)),
+    };
+  } else {
+    const viewport = page.viewportSize();
+    if (!viewport) {
+      throw new Error(`${label} did not expose a viewport for wheel testing`);
+    }
+
+    point = {
+      x: Math.round(viewport.width / 2),
+      y: Math.round(viewport.height / 2),
+    };
   }
 
-  await page.mouse.move(
-    box.x + Math.max(24, Math.min(box.width / 2, box.width - 24)),
-    box.y + Math.max(24, Math.min(box.height / 2, box.height - 24))
-  );
+  await page.mouse.move(point.x, point.y);
   await page.mouse.wheel(0, Math.max(800, Math.min(before.clientHeight, 1200)));
   await page.waitForTimeout(400);
 
@@ -220,10 +236,36 @@ async function validateUiOnce() {
     const compareButtons = page.getByRole("button", { name: "Add to compare" });
     if ((await compareButtons.count()) >= 2) {
       await compareButtons.first().click();
+      await page.waitForFunction(() => {
+        const text = document.body?.innerText || "";
+        return (
+          text.includes("1/4") &&
+          (text.includes("Select 1 more profile to compare.") ||
+            text.includes("Select 1 more to compare"))
+        );
+      }, { timeout: 15000 });
+
       await page.getByRole("button", { name: "Add to compare" }).first().click();
-      await page.getByRole("button", { name: "Compare local candidates" }).click();
+      await page.getByRole("button", { name: /Compare 2 selected profiles/i }).click();
       await page.waitForSelector("text=Issue matrix for", { timeout: 15000 });
-      await assertWheelScroll(page, "Compare screen", page.getByText("Housing"));
+      const compareBodyText = await page.locator("body").innerText();
+      if (!compareBodyText.includes("2 profiles selected")) {
+        throw new Error("Compare screen did not preserve the selected compare count");
+      }
+
+      const compareImageSrc = await page.evaluate(() => {
+        const image = Array.from(document.querySelectorAll("img")).find((img) =>
+          /\/(?:api\/)?images\/candidates\//.test(`${img.getAttribute("src") || ""}`)
+        );
+
+        return image?.getAttribute("src") || null;
+      });
+
+      if (!compareImageSrc) {
+        throw new Error("Compare screen did not render a same-origin candidate portrait");
+      }
+
+      await assertWheelScroll(page, "Compare screen", page.getByText("Open evidence, not just opinions"));
     } else {
       throw new Error("Release did not expose enough candidates for compare validation");
     }
@@ -237,14 +279,13 @@ async function validateUiOnce() {
       return text.includes("Official-equivalent: yes");
     }, { timeout: 15000 });
 
-    await finderInput.fill("D15");
+    await finderInput.fill("D04");
     await page.waitForFunction(() => {
       const text = document.body?.innerText || "";
       return (
-        text.includes("Ambiguous routing-key match") &&
-        text.includes("Results shown below are not applied until you choose one.") &&
-        text.includes("Dublin Fingal West") &&
-        text.includes("Dublin West")
+        text.includes("Routing-key Eircode match") &&
+        text.includes("Dublin Bay South") &&
+        text.includes("Auto-applied to your local ballot context")
       );
     }, { timeout: 15000 });
 

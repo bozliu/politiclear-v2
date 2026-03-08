@@ -30,6 +30,10 @@ const summary = {
   lastUpdated: bundle.meta?.lastUpdated || null,
   totalConstituencies: constituencies.length,
   withBoundary,
+  portraitResolvedCandidates:
+    bundle.coverage?.portraitResolvedCandidates ?? null,
+  portraitUnresolvedCandidates:
+    bundle.coverage?.portraitUnresolvedCandidates ?? null,
 };
 
 const failures = [];
@@ -74,12 +78,76 @@ if (!bundle.meta?.fallbackMode) {
   failures.push("Bundle meta is missing fallbackMode");
 }
 
+const unresolvedPortraits = electionCandidates.filter((candidate) => {
+  return (
+    candidate?.portraitResolutionState !== "resolved" ||
+    !candidate?.portraitSourceType ||
+    !candidate?.portraitSourceUrl ||
+    !candidate?.sourceImageUrl
+  );
+});
+
+if (unresolvedPortraits.length) {
+  failures.push(
+    `Expected 0 unresolved election-candidate portraits, got ${unresolvedPortraits.length}`
+  );
+}
+
+const invalidMediaPortraits = electionCandidates.filter((candidate) => {
+  return (
+    candidate?.portraitSourceType === "media" &&
+    (candidate?.portraitDeliveryMode !== "proxied" || candidate?.portraitPath)
+  );
+});
+
+if (invalidMediaPortraits.length) {
+  failures.push(
+    `Media-backed portraits must stay proxied-only, but ${invalidMediaPortraits.length} candidates violated that rule`
+  );
+}
+
+const invalidCachedPortraits = electionCandidates.filter((candidate) => {
+  if (candidate?.portraitResolutionState !== "resolved") {
+    return false;
+  }
+
+  if (candidate?.portraitSourceType === "media") {
+    return false;
+  }
+
+  return (
+    candidate?.portraitDeliveryMode !== "cached" ||
+    !candidate?.portraitPath
+  );
+});
+
+if (invalidCachedPortraits.length) {
+  failures.push(
+    `Non-media portraits must be cached local assets, but ${invalidCachedPortraits.length} candidates are missing cached portrait files`
+  );
+}
+
+if ((bundle.coverage?.portraitUnresolvedCandidates ?? 0) !== 0) {
+  failures.push(
+    `Expected bundle coverage portraitUnresolvedCandidates=0, got ${bundle.coverage?.portraitUnresolvedCandidates}`
+  );
+}
+
 if (failures.length) {
   console.error(
     JSON.stringify(
       {
         failures,
         summary,
+        portraitSample: unresolvedPortraits.slice(0, 12).map((candidate) => ({
+          id: candidate.id,
+          name: candidate.name,
+          party: candidate.party,
+          constituencyName: candidate.constituencyName,
+          portraitDeliveryMode: candidate.portraitDeliveryMode || null,
+          portraitResolutionState: candidate.portraitResolutionState || null,
+          portraitSourceType: candidate.portraitSourceType || null,
+        })),
       },
       null,
       2

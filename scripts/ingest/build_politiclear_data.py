@@ -14,11 +14,14 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
+from portrait_auto import resolve_portraits
+
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_DIR = ROOT / "data" / "generated"
 BOOTSTRAP_PATH = OUTPUT_DIR / "politiclear-cache.json"
 DETAILS_PATH = OUTPUT_DIR / "politiclear-evidence.json"
 PORTRAITS_DIR = OUTPUT_DIR / "portraits"
+PORTRAIT_REPORT_PATH = OUTPUT_DIR / "politiclear-portrait-report.json"
 
 TODAY = date.today().isoformat()
 NOW = datetime.now(timezone.utc).isoformat()
@@ -1214,7 +1217,14 @@ def build_candidate_summary(member, detail, issue_catalog, party_lookup):
         "evidenceStatus": detail.get("evidenceStatus", "summaryOnly"),
         "id": slugify(member["memberCode"]),
         "imageUrl": member["imageUrl"],
+        "sourceImageUrl": member.get("sourceImageUrl") or member["imageUrl"],
         "portraitPath": member.get("portraitPath"),
+        "portraitDeliveryMode": member.get("portraitDeliveryMode"),
+        "portraitResolutionState": member.get("portraitResolutionState"),
+        "portraitSourceDomain": member.get("portraitSourceDomain"),
+        "portraitSourcePageUrl": member.get("portraitSourcePageUrl"),
+        "portraitSourceType": member.get("portraitSourceType"),
+        "portraitSourceUrl": member.get("portraitSourceUrl"),
         "isIncumbent": True,
         "issueCoverageById": issue_coverage_by_id,
         "issueEvidenceCount": issue_evidence_count,
@@ -1339,7 +1349,8 @@ def build_election_candidate_summary(
         "firstPreferenceVotes": candidate["firstPreferenceVotes"],
         "gender": candidate["gender"],
         "id": candidate["id"],
-        "imageUrl": matched_member["imageUrl"] if matched_member else None,
+        "imageUrl": candidate.get("imageUrl")
+        or (matched_member["imageUrl"] if matched_member else None),
         "imageFallbackLabel": candidate["partyCode"] or candidate["name"][:2],
         "isIncumbent": bool(matched_member),
         "isOutgoingMember": candidate["isOutgoingMember"],
@@ -1360,8 +1371,18 @@ def build_election_candidate_summary(
         "partyId": slugify(candidate["party"]) or "independent",
         "partyLinks": party_links,
         "partyCode": candidate["partyCode"],
+        "portraitDeliveryMode": candidate.get("portraitDeliveryMode"),
+        "portraitPath": candidate.get("portraitPath"),
+        "portraitResolutionState": candidate.get("portraitResolutionState"),
+        "portraitSourceDomain": candidate.get("portraitSourceDomain"),
+        "portraitSourcePageUrl": candidate.get("portraitSourcePageUrl"),
+        "portraitSourceType": candidate.get("portraitSourceType"),
+        "portraitSourceUrl": candidate.get("portraitSourceUrl"),
         "profileKind": PROFILE_KIND_ELECTION_CANDIDATE,
         "profileUrl": matched_member["profileUrl"] if matched_member else None,
+        "sourceImageUrl": candidate.get("sourceImageUrl")
+        or (matched_member.get("sourceImageUrl") if matched_member else None)
+        or (matched_member["imageUrl"] if matched_member else None),
         "sourceCount": len(dedupe_sources([candidate["profileSource"], *party_links])),
         "sourceNote": (
             (
@@ -1615,10 +1636,17 @@ def build_candidate_detail(member, parties_by_name, issue_catalog):
         "partyLinks": party_links,
         "profileKind": PROFILE_KIND_CURRENT_REPRESENTATIVE,
         "profileUrl": member["profileUrl"],
+        "portraitDeliveryMode": member.get("portraitDeliveryMode"),
         "portraitPath": member.get("portraitPath"),
+        "portraitResolutionState": member.get("portraitResolutionState"),
+        "portraitSourceDomain": member.get("portraitSourceDomain"),
+        "portraitSourcePageUrl": member.get("portraitSourcePageUrl"),
+        "portraitSourceType": member.get("portraitSourceType"),
+        "portraitSourceUrl": member.get("portraitSourceUrl"),
         "recentDebates": recent_debates,
         "recentQuestions": recent_questions,
         "recentVotes": recent_votes,
+        "sourceImageUrl": member.get("sourceImageUrl") or member["imageUrl"],
         "sourceCount": len(sources),
         "sourceType": "oireachtas",
         "sources": sources,
@@ -1683,10 +1711,17 @@ def build_candidate_details(members, parties, issue_catalog):
                     "partyLinks": parties_by_name.get(member["party"], {}).get("officialLinks", []),
                     "profileKind": PROFILE_KIND_CURRENT_REPRESENTATIVE,
                     "profileUrl": member["profileUrl"],
+                    "portraitDeliveryMode": member.get("portraitDeliveryMode"),
                     "portraitPath": member.get("portraitPath"),
+                    "portraitResolutionState": member.get("portraitResolutionState"),
+                    "portraitSourceDomain": member.get("portraitSourceDomain"),
+                    "portraitSourcePageUrl": member.get("portraitSourcePageUrl"),
+                    "portraitSourceType": member.get("portraitSourceType"),
+                    "portraitSourceUrl": member.get("portraitSourceUrl"),
                     "recentDebates": [],
                     "recentQuestions": [],
                     "recentVotes": [],
+                    "sourceImageUrl": member.get("sourceImageUrl") or member["imageUrl"],
                     "issueCoverageById": {
                         issue["id"]: False for issue in issue_catalog
                     },
@@ -1747,6 +1782,101 @@ def cache_member_portraits(members):
                 member["portraitPath"] = future.result()
             except Exception:
                 member["portraitPath"] = None
+
+
+def build_member_portrait_metadata(member):
+    source_image_url = member.get("imageUrl")
+    return {
+        "portraitDeliveryMode": "cached" if member.get("portraitPath") else "proxied",
+        "portraitPath": member.get("portraitPath"),
+        "portraitResolutionState": "resolved" if source_image_url else "unresolved",
+        "portraitSourceDomain": "data.oireachtas.ie" if source_image_url else None,
+        "portraitSourcePageUrl": member.get("profileUrl"),
+        "portraitSourceType": "oireachtas",
+        "portraitSourceUrl": source_image_url,
+        "sourceImageUrl": source_image_url,
+    }
+
+
+def build_unresolved_portrait_metadata():
+    return {
+        "portraitDeliveryMode": None,
+        "portraitPath": None,
+        "portraitResolutionState": "unresolved",
+        "portraitSourceDomain": None,
+        "portraitSourcePageUrl": None,
+        "portraitSourceType": None,
+        "portraitSourceUrl": None,
+        "sourceImageUrl": None,
+    }
+
+
+def attach_portrait_metadata(record, metadata):
+    enriched = metadata or build_unresolved_portrait_metadata()
+    record["portraitDeliveryMode"] = enriched.get("portraitDeliveryMode")
+    record["portraitPath"] = enriched.get("portraitPath")
+    record["portraitResolutionState"] = enriched.get("portraitResolutionState") or "unresolved"
+    record["portraitSourceDomain"] = enriched.get("portraitSourceDomain")
+    record["portraitSourcePageUrl"] = enriched.get("portraitSourcePageUrl")
+    record["portraitSourceType"] = enriched.get("portraitSourceType")
+    record["portraitSourceUrl"] = enriched.get("portraitSourceUrl")
+    record["sourceImageUrl"] = enriched.get("sourceImageUrl") or record.get("imageUrl")
+    if enriched.get("sourceImageUrl"):
+        record["imageUrl"] = enriched.get("sourceImageUrl")
+    return record
+
+
+def write_portrait_report(election_candidates):
+    unresolved_candidates = []
+    resolved_by_source_type = Counter()
+    media_fallback_breakdown = Counter()
+
+    for candidate in election_candidates:
+        resolution_state = candidate.get("portraitResolutionState") or "unresolved"
+        if resolution_state != "resolved":
+            unresolved_candidates.append(
+                {
+                    "candidateId": candidate["id"],
+                    "constituencyName": candidate["constituencyName"],
+                    "name": candidate["name"],
+                    "party": candidate["party"],
+                    "portraitDeliveryMode": candidate.get("portraitDeliveryMode"),
+                    "portraitSourceDomain": candidate.get("portraitSourceDomain"),
+                    "portraitSourcePageUrl": candidate.get("portraitSourcePageUrl"),
+                    "portraitSourceType": candidate.get("portraitSourceType"),
+                }
+            )
+            continue
+
+        source_type = candidate.get("portraitSourceType") or "unknown"
+        resolved_by_source_type[source_type] += 1
+        if source_type == "media":
+            media_fallback_breakdown[candidate.get("portraitSourceDomain") or "unknown"] += 1
+
+    report = {
+        "generatedAt": TODAY,
+        "resolvedCount": len(election_candidates) - len(unresolved_candidates),
+        "resolvedBySourceType": dict(
+            sorted(resolved_by_source_type.items(), key=lambda item: item[0])
+        ),
+        "threshold": 0,
+        "totalCandidates": len(election_candidates),
+        "unresolvedCandidates": unresolved_candidates,
+        "unresolvedCount": len(unresolved_candidates),
+        "unresolvedByParty": dict(
+            sorted(
+                Counter(item["party"] for item in unresolved_candidates).items(),
+                key=lambda item: (-item[1], item[0]),
+            )
+        ),
+        "mediaFallbackBreakdown": dict(
+            sorted(media_fallback_breakdown.items(), key=lambda item: (-item[1], item[0]))
+        ),
+    }
+    PORTRAIT_REPORT_PATH.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False) + "\n"
+    )
+    return report
 
 
 def build_learning_bundle(official_lookup, issue_catalog, parties):
@@ -2010,6 +2140,8 @@ def build_datasets():
     issue_catalog = build_issue_catalog()
     members = fetch_current_dail_members()
     cache_member_portraits(members)
+    for member in members:
+        attach_portrait_metadata(member, build_member_portrait_metadata(member))
     boundary_lookup = build_boundary_lookup()
     constituencies = build_constituencies(members, official_lookup, boundary_lookup)
     election_candidates_raw = parse_election_candidates(constituencies, official_lookup)
@@ -2027,6 +2159,38 @@ def build_datasets():
         f"{slugify(member['name'])}::{slugify(member['constituencyName'])}": member
         for member in members
     }
+    party_site_lookup = {
+        party["name"]: next(
+            (
+                link.get("url")
+                for link in party.get("officialLinks", [])
+                if link.get("type") == "party"
+            ),
+            party_site_for(party["name"]),
+        )
+        for party in parties
+    }
+    unmatched_candidates = []
+    for candidate in election_candidates_raw:
+        merge_key = f"{slugify(candidate['name'])}::{slugify(candidate['constituencyName'])}"
+        matched_member = current_members_by_merge_key.get(merge_key)
+        if matched_member:
+            attach_portrait_metadata(
+                candidate,
+                build_member_portrait_metadata(matched_member),
+            )
+            continue
+        unmatched_candidates.append(candidate)
+
+    resolved_portraits = resolve_portraits(
+        unmatched_candidates,
+        PORTRAITS_DIR,
+        party_site_lookup,
+        TODAY,
+    )
+    for candidate in unmatched_candidates:
+        attach_portrait_metadata(candidate, resolved_portraits.get(candidate["id"]))
+
     candidates = [
         build_candidate_summary(
             member,
@@ -2045,6 +2209,7 @@ def build_datasets():
         )
         for candidate in election_candidates_raw
     ]
+    portrait_report = write_portrait_report(election_candidates_raw)
 
     bootstrap_dataset = {
         "meta": {
@@ -2063,6 +2228,7 @@ def build_datasets():
             "seatCount": len(candidates),
             "staleAfterDays": DEFAULT_STALE_AFTER_DAYS,
             "syncStatus": "synced",
+            "portraitReportPath": str(PORTRAIT_REPORT_PATH.relative_to(ROOT)),
         },
         "boundarySource": official_lookup["osi-boundaries"],
         "candidates": candidates,
@@ -2074,6 +2240,11 @@ def build_datasets():
             "issueLinkedProfiles": sum(
                 1 for candidate in candidates if candidate.get("issueEvidenceCount", 0) > 0
             ),
+            "portraitMediaFallbacks": sum(
+                1 for candidate in election_candidates if candidate.get("portraitSourceType") == "media"
+            ),
+            "portraitResolvedCandidates": portrait_report["resolvedCount"],
+            "portraitUnresolvedCandidates": portrait_report["unresolvedCount"],
         },
         "currentRepresentatives": candidates,
         "defaultConstituencyId": "dublin-bay-south"
@@ -2103,6 +2274,7 @@ def build_datasets():
             "notes": [
                 "Detailed candidate evidence is sourced from official Oireachtas members, questions, debates, and votes APIs.",
             ],
+            "portraitReportPath": str(PORTRAIT_REPORT_PATH.relative_to(ROOT)),
             "releaseStage": "live",
             "staleAfterDays": DEFAULT_STALE_AFTER_DAYS,
             "syncStatus": "synced",
@@ -2116,6 +2288,7 @@ def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     PORTRAITS_DIR.mkdir(parents=True, exist_ok=True)
     bootstrap_dataset, evidence_dataset = build_datasets()
+    portrait_report = json.loads(PORTRAIT_REPORT_PATH.read_text(encoding="utf-8"))
 
     BOOTSTRAP_PATH.write_text(
         json.dumps(bootstrap_dataset, indent=2, ensure_ascii=False) + "\n"
@@ -2141,6 +2314,9 @@ def main():
                 "electionCandidateCount": len(bootstrap_dataset["electionCandidates"]),
                 "generatedAt": bootstrap_dataset["meta"]["generatedAt"],
                 "portraitCount": len(list(PORTRAITS_DIR.glob("*.jpg"))),
+                "portraitReportOutput": str(PORTRAIT_REPORT_PATH),
+                "resolvedPortraitCount": portrait_report["resolvedCount"],
+                "unresolvedPortraitCount": portrait_report["unresolvedCount"],
             },
             ensure_ascii=False,
         )

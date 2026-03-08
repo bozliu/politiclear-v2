@@ -142,9 +142,9 @@ function buildUnknownIssues(issueCatalog, candidateName, source) {
   }));
 }
 
-function buildCandidateImageUrl(candidateId, imageUrl) {
-  if (!candidateId || !imageUrl) {
-    return imageUrl || null;
+function buildCandidateImageUrl(candidateId, imageSource) {
+  if (!candidateId || !imageSource) {
+    return imageSource || null;
   }
 
   return buildApiUrl(`/images/candidates/${encodeURIComponent(candidateId)}`);
@@ -459,9 +459,22 @@ function ensureCandidateShape(candidate, issueCatalog, constituencyLookup, fallb
     gender: candidate.gender || fallback?.gender || null,
     imageUrl: buildCandidateImageUrl(
       candidate.id || fallback?.id,
-      candidate.imageUrl || fallback?.imageUrl || null
+      candidate.sourceImageUrl ||
+        fallback?.sourceImageUrl ||
+        candidate.imageUrl ||
+        fallback?.imageUrl ||
+        candidate.portraitPath ||
+        fallback?.portraitPath ||
+        null
     ),
-    sourceImageUrl: candidate.imageUrl || fallback?.imageUrl || null,
+    sourceImageUrl:
+      candidate.sourceImageUrl ||
+      fallback?.sourceImageUrl ||
+      candidate.imageUrl ||
+      fallback?.imageUrl ||
+      candidate.portraitPath ||
+      fallback?.portraitPath ||
+      null,
     imageFallbackLabel:
       candidate.imageFallbackLabel ||
       fallback?.imageFallbackLabel ||
@@ -477,6 +490,34 @@ function ensureCandidateShape(candidate, issueCatalog, constituencyLookup, fallb
     memberUri: candidate.memberUri || fallback?.memberUri || null,
     offices: candidate.offices || fallback?.offices || [],
     partyLinks,
+    portraitDeliveryMode:
+      candidate.portraitDeliveryMode ||
+      fallback?.portraitDeliveryMode ||
+      null,
+    portraitPath:
+      candidate.portraitPath ||
+      fallback?.portraitPath ||
+      null,
+    portraitResolutionState:
+      candidate.portraitResolutionState ||
+      fallback?.portraitResolutionState ||
+      "unresolved",
+    portraitSourceDomain:
+      candidate.portraitSourceDomain ||
+      fallback?.portraitSourceDomain ||
+      null,
+    portraitSourcePageUrl:
+      candidate.portraitSourcePageUrl ||
+      fallback?.portraitSourcePageUrl ||
+      null,
+    portraitSourceType:
+      candidate.portraitSourceType ||
+      fallback?.portraitSourceType ||
+      null,
+    portraitSourceUrl:
+      candidate.portraitSourceUrl ||
+      fallback?.portraitSourceUrl ||
+      null,
     profileKind:
       candidate.profileKind ||
       fallback?.profileKind ||
@@ -1034,9 +1075,42 @@ export function mergeCandidateDetail(baseCandidate, detailCandidate) {
     detailCandidate.recentVotes || baseCandidate.recentVotes || [];
   merged.sourceImageUrl =
     detailCandidate.sourceImageUrl ||
+    detailCandidate.portraitSourceUrl ||
     detailCandidate.imageUrl ||
+    detailCandidate.portraitPath ||
     baseCandidate.sourceImageUrl ||
+    baseCandidate.portraitSourceUrl ||
     baseCandidate.imageUrl ||
+    baseCandidate.portraitPath ||
+    null;
+  merged.portraitDeliveryMode =
+    detailCandidate.portraitDeliveryMode ||
+    baseCandidate.portraitDeliveryMode ||
+    null;
+  merged.portraitPath =
+    detailCandidate.portraitPath ||
+    baseCandidate.portraitPath ||
+    null;
+  merged.portraitResolutionState =
+    detailCandidate.portraitResolutionState ||
+    baseCandidate.portraitResolutionState ||
+    "unresolved";
+  merged.portraitSourceDomain =
+    detailCandidate.portraitSourceDomain ||
+    baseCandidate.portraitSourceDomain ||
+    null;
+  merged.portraitSourcePageUrl =
+    detailCandidate.portraitSourcePageUrl ||
+    baseCandidate.portraitSourcePageUrl ||
+    null;
+  merged.portraitSourceType =
+    detailCandidate.portraitSourceType ||
+    baseCandidate.portraitSourceType ||
+    null;
+  merged.portraitSourceUrl =
+    detailCandidate.portraitSourceUrl ||
+    baseCandidate.portraitSourceUrl ||
+    merged.sourceImageUrl ||
     null;
   merged.imageUrl = buildCandidateImageUrl(
     merged.id,
