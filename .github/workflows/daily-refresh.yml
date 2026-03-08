@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
       - name: Refresh and verify official data bundle
         run: npm run prepare:data
 
@@ -86,8 +89,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy refreshed canonical preview
-        if: ${{ secrets.VERCEL_TOKEN != '' && vars.VERCEL_CANONICAL_URL != '' && vars.VERCEL_PROJECT_SLUG != '' && vars.VERCEL_SCOPE_SLUG != '' }}
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Deploy refreshed canonical preview when config is present
         env:
           POLITICLEAR_EXPECT_CANONICAL_STAGE: public-beta
           POLITICLEAR_EXPECT_DEPLOY_STAGE: public-beta
@@ -95,8 +100,9 @@ jobs:
           VERCEL_PROJECT_SLUG: ${{ vars.VERCEL_PROJECT_SLUG }}
           VERCEL_SCOPE_SLUG: ${{ vars.VERCEL_SCOPE_SLUG }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npm run deploy:preview:fresh-data
-
-      - name: Skip deploy when Vercel vars or token are missing
-        if: ${{ secrets.VERCEL_TOKEN == '' || vars.VERCEL_CANONICAL_URL == '' || vars.VERCEL_PROJECT_SLUG == '' || vars.VERCEL_SCOPE_SLUG == '' }}
-        run: echo "Vercel deployment variables are incomplete, so the workflow refreshed data and build artifacts only."
+        run: |
+          if [ -n "${VERCEL_TOKEN:-}" ] && [ -n "${VERCEL_CANONICAL_URL:-}" ] && [ -n "${VERCEL_PROJECT_SLUG:-}" ] && [ -n "${VERCEL_SCOPE_SLUG:-}" ]; then
+            npm run deploy:preview:fresh-data
+          else
+            echo "Vercel deployment variables are incomplete, so the workflow refreshed data and build artifacts only."
+          fi
