@@ -29,7 +29,7 @@ jobs:
       - name: Set up Conda dl environment
         uses: conda-incubator/setup-miniconda@v3
         with:
-          python-version: "3.11"
+          environment-file: environment.dl.yml
           activate-environment: dl
           auto-activate: false
           channels: conda-forge
@@ -40,6 +40,9 @@ jobs:
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
+
+      - name: Smoke check Python ingest dependencies
+        run: conda run -n dl python -c "import requests, lxml, PIL; print('python deps ok')"
 
       - name: Verify generated bundle
         run: npm run verify:bundle
