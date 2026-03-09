@@ -246,11 +246,51 @@ async function captureLookupFlow(page, recorder, baseUrl) {
   const input = page.getByRole("textbox", {
     name: /Search constituency, town, or routing-key Eircode/i,
   });
+  const mapTitle = page.getByText("Official constituency boundary map");
+  const routingKeyMatch = page.getByText("Routing-key match", { exact: true });
+  const autoAppliedHint = page.getByText(/Applied automatically from/i);
+  const officialHandoff = page.getByText("Official handoff", { exact: true });
+  const officialLookupButton = page.getByRole("button", {
+    name: /Use official lookup/i,
+  });
 
   await recorder.clearAndType(input, "D04", 160, 1350);
-  await recorder.hold(800);
-  await recorder.clearAndType(input, "12 Main Street Dublin", 90, 1450);
+  await routingKeyMatch.waitFor({ state: "visible" });
+  await autoAppliedHint.waitFor({ state: "visible" });
+  await recorder.hold(700);
+
+  await recorder.wheel(760, 8, 180);
+  await mapTitle.scrollIntoViewIfNeeded();
+  await recorder.hold(900);
+
+  const hoverTargetIndex = await page.evaluate(() => {
+    const paths = Array.from(document.querySelectorAll("svg path"));
+    const minimumArea = 1800;
+    const verticalPadding = 120;
+
+    const visibleTarget = paths.findIndex((path) => {
+      const rect = path.getBoundingClientRect();
+      return (
+        rect.width * rect.height >= minimumArea &&
+        rect.top >= verticalPadding &&
+        rect.bottom <= window.innerHeight - verticalPadding
+      );
+    });
+
+    return visibleTarget >= 0 ? visibleTarget : 0;
+  });
+
+  await page.locator("svg path").nth(hoverTargetIndex).hover();
+  await page.getByText("Hovered constituency").waitFor({ state: "visible" });
   await recorder.hold(1100);
+
+  await recorder.wheel(-760, 8, 180);
+  await input.scrollIntoViewIfNeeded();
+  await recorder.hold(500);
+  await recorder.clearAndType(input, "12 Main Street Dublin", 90, 1450);
+  await officialHandoff.waitFor({ state: "visible" });
+  await officialLookupButton.waitFor({ state: "visible" });
+  await recorder.hold(1200);
 }
 
 async function captureProfileFlow(page, recorder, baseUrl) {

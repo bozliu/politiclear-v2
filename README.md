@@ -14,11 +14,11 @@ All three captures below were recorded from the canonical public release at [htt
 
 Build a local shortlist, keep the selected profiles visible, and open a side-by-side issue matrix with linked evidence and explicit unknowns.
 
-### Start from your real constituency, not a generic feed
+### See the live constituency boundary, not just a search result
 
 ![Politiclear lookup and live map flow](./docs/readme-assets/lookup-map-flow.gif)
 
-The lookup flow distinguishes routing-key Eircodes from full address searches, syncs the live constituency map, and hands off exact address checks to the official tool instead of pretending certainty.
+Search by routing-key Eircode, watch the live boundary update, and hand exact address checks to the official tool instead of pretending certainty.
 
 ### Open the evidence trail behind a profile
 
