@@ -6,7 +6,7 @@ This repo is the 2026 continuation of the 2024 Hack Trinity prototype from [Para
 
 ## See It In Action
 
-All three captures below were recorded from the canonical public release at [https://skill-deploy-017ji4k0pl.vercel.app](https://skill-deploy-017ji4k0pl.vercel.app), not from localhost.
+All three captures below were recorded from the canonical public release at [https://skill-deploy-017ji4k0pl.vercel.app](https://skill-deploy-017ji4k0pl.vercel.app)
 
 ### Compare four local profiles in one full issue matrix
 
