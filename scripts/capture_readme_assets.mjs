@@ -176,6 +176,174 @@ class FrameRecorder {
   }
 }
 
+async function clickTab(recorder, page, label) {
+  const tab = page.locator("[role=tab]").filter({ hasText: new RegExp(`^${label}$`) }).first();
+  await recorder.click(tab, 1100);
+}
+
+async function markNearestVerticalScroller(locator, attributeName) {
+  return locator.first().evaluate((element, attrName) => {
+    let current = element;
+    while (current) {
+      const style = getComputedStyle(current);
+      if (
+        (style.overflowY === "auto" || style.overflowY === "scroll") &&
+        current.scrollHeight > current.clientHeight + 20
+      ) {
+        current.setAttribute(attrName, "active");
+        return {
+          clientHeight: current.clientHeight,
+          scrollHeight: current.scrollHeight,
+          scrollTop: current.scrollTop,
+        };
+      }
+      current = current.parentElement;
+    }
+    return null;
+  }, attributeName);
+}
+
+async function animateMarkedVerticalScroll(page, recorder, attributeName, from, to, steps, holdMs) {
+  const scroller = page.locator(`[${attributeName}="active"]`);
+  for (let index = 1; index <= steps; index += 1) {
+    const nextValue = from + ((to - from) * index) / steps;
+    await scroller.evaluate((element, scrollTop) => {
+      element.scrollTop = scrollTop;
+    }, nextValue);
+    await recorder.hold(holdMs);
+  }
+}
+
+async function clearMarkedScroller(page, attributeName) {
+  await page
+    .locator(`[${attributeName}="active"]`)
+    .evaluate((element) => element.removeAttribute(attributeName))
+    .catch(() => {});
+}
+
+async function getMatrixSweepMetrics(page) {
+  return page.evaluate(() => {
+    const findExactText = (text) =>
+      Array.from(document.querySelectorAll("*")).find(
+        (element) => (element.textContent || "").trim() === text
+      );
+
+    const sectionTitle = findExactText("Open evidence, not just opinions");
+    const matrixIssue = findExactText("Issue");
+    const nextSection = findExactText("Add or swap profiles");
+
+    if (!sectionTitle || !matrixIssue || !nextSection) {
+      return null;
+    }
+
+    let scroller = sectionTitle;
+    while (scroller) {
+      const style = getComputedStyle(scroller);
+      if (
+        (style.overflowY === "auto" || style.overflowY === "scroll") &&
+        scroller.scrollHeight > scroller.clientHeight + 20
+      ) {
+        break;
+      }
+      scroller = scroller.parentElement;
+    }
+
+    if (!scroller) {
+      return null;
+    }
+
+    scroller.setAttribute("data-readme-scroll-root", "active");
+
+    const scrollerRect = scroller.getBoundingClientRect();
+    const issueRect = matrixIssue.getBoundingClientRect();
+    const nextSectionRect = nextSection.getBoundingClientRect();
+    const currentScrollTop = scroller.scrollTop;
+    const maxScrollTop = scroller.scrollHeight - scroller.clientHeight;
+    const startScrollTop = Math.max(
+      0,
+      Math.round(currentScrollTop + (issueRect.top - scrollerRect.top) - 150)
+    );
+    const endScrollTop = Math.min(
+      maxScrollTop,
+      Math.max(
+        startScrollTop + 220,
+        Math.round(
+          currentScrollTop +
+            (nextSectionRect.top - scrollerRect.top) -
+            (scroller.clientHeight - 180)
+        )
+      )
+    );
+
+    const matrixHorizontalScroller = matrixIssue.closest("div")?.parentElement?.parentElement;
+    const horizontalOverflow =
+      matrixHorizontalScroller &&
+      matrixHorizontalScroller.scrollWidth > matrixHorizontalScroller.clientWidth + 20
+        ? {
+            maxScrollLeft:
+              matrixHorizontalScroller.scrollWidth - matrixHorizontalScroller.clientWidth,
+          }
+        : null;
+
+    if (horizontalOverflow) {
+      matrixHorizontalScroller.setAttribute("data-readme-matrix-x", "active");
+    }
+
+    return {
+      currentScrollTop,
+      endScrollTop,
+      horizontalOverflow,
+      startScrollTop,
+    };
+  });
+}
+
+async function animateMatrixHorizontalPan(page, recorder) {
+  const panTarget = page.locator('[data-readme-matrix-x="active"]');
+  const exists = await panTarget.count();
+  if (!exists) {
+    return;
+  }
+
+  const maxScrollLeft = await panTarget.evaluate(
+    (element) => element.scrollWidth - element.clientWidth
+  );
+
+  if (maxScrollLeft <= 20) {
+    await clearMarkedScroller(page, "data-readme-matrix-x");
+    return;
+  }
+
+  for (let index = 1; index <= 10; index += 1) {
+    const nextValue = (maxScrollLeft * index) / 10;
+    await panTarget.evaluate((element, scrollLeft) => {
+      element.scrollLeft = scrollLeft;
+    }, nextValue);
+    await recorder.hold(120);
+  }
+
+  await clearMarkedScroller(page, "data-readme-matrix-x");
+}
+
+async function getSelectedConstituencyTitle(page) {
+  return page.evaluate(() => {
+    const eyebrow = Array.from(document.querySelectorAll("*")).find(
+      (element) => {
+        const text = (element.textContent || "").trim();
+        return text === "Selected constituency" || text === "Hovered constituency";
+      }
+    );
+    if (!eyebrow?.parentElement) {
+      return null;
+    }
+
+    const textNodes = Array.from(eyebrow.parentElement.children)
+      .map((element) => (element.textContent || "").trim())
+      .filter(Boolean);
+    return textNodes[1] || null;
+  });
+}
+
 async function waitForAppReady(page, baseUrl) {
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.waitForLoadState("domcontentloaded");
@@ -225,72 +393,164 @@ async function renderGif(sourceDir, targetPath) {
 
 async function captureCompareFlow(page, recorder, baseUrl) {
   await waitForAppReady(page, baseUrl);
-  await recorder.hold(650);
+  await recorder.hold(450);
+  await clickTab(recorder, page, "Candidates");
+  await page.getByText("Ballot coverage for").waitFor({ state: "visible" });
+  await recorder.hold(450);
 
-  const addButtons = page.getByRole("button", { name: "Add to compare" });
-  await recorder.click(addButtons.first(), 900);
-  await recorder.click(addButtons.first(), 950);
+  for (let index = 1; index <= 4; index += 1) {
+    const addButton = page.getByRole("button", { name: "Add to compare" }).first();
+    await recorder.click(addButton, index === 4 ? 900 : 700);
+    await page.waitForFunction(
+      (expectedCount) => (document.body?.innerText || "").includes(`${expectedCount}/4`),
+      index
+    );
+    await recorder.hold(index === 4 ? 450 : 240);
+  }
 
   const compareButton = page.getByRole("button", {
-    name: /Compare 2 selected profiles/i,
+    name: /Compare 4 selected profiles/i,
   });
-  await recorder.click(compareButton, 1200);
+  await compareButton.waitFor({ state: "visible" });
+  await recorder.hold(350);
+  await recorder.click(compareButton, 1250);
   await page.waitForFunction(() => document.title === "CandidateCompare");
-  await recorder.hold(1400);
+  await page.getByText("Open evidence, not just opinions").waitFor({
+    state: "visible",
+  });
+  await recorder.hold(400);
+
+  const matrixHeading = page.getByText("Open evidence, not just opinions");
+  await matrixHeading.scrollIntoViewIfNeeded();
+  await recorder.hold(550);
+
+  const matrixMetrics = await getMatrixSweepMetrics(page);
+  if (!matrixMetrics) {
+    throw new Error("Unable to prepare compare matrix sweep for README capture");
+  }
+
+  await animateMarkedVerticalScroll(
+    page,
+    recorder,
+    "data-readme-scroll-root",
+    matrixMetrics.currentScrollTop,
+    matrixMetrics.startScrollTop,
+    6,
+    120
+  );
+  await recorder.hold(600);
+
+  if (matrixMetrics.horizontalOverflow) {
+    await animateMatrixHorizontalPan(page, recorder);
+    await recorder.hold(250);
+  }
+
+  await animateMarkedVerticalScroll(
+    page,
+    recorder,
+    "data-readme-scroll-root",
+    matrixMetrics.startScrollTop,
+    matrixMetrics.endScrollTop,
+    20,
+    140
+  );
+
+  const governanceBox = await page.getByText("Governance", { exact: true }).boundingBox();
+  if (!governanceBox) {
+    await animateMarkedVerticalScroll(
+      page,
+      recorder,
+      "data-readme-scroll-root",
+      matrixMetrics.endScrollTop,
+      matrixMetrics.endScrollTop + 240,
+      4,
+      120
+    );
+  }
+
+  await recorder.hold(900);
+  await clearMarkedScroller(page, "data-readme-scroll-root");
 }
 
 async function captureLookupFlow(page, recorder, baseUrl) {
   await waitForAppReady(page, baseUrl);
-  await recorder.hold(500);
-
-  const input = page.getByRole("textbox", {
-    name: /Search constituency, town, or routing-key Eircode/i,
-  });
+  await recorder.hold(280);
   const mapTitle = page.getByText("Official constituency boundary map");
-  const routingKeyMatch = page.getByText("Routing-key match", { exact: true });
-  const autoAppliedHint = page.getByText(/Applied automatically from/i);
-  const officialHandoff = page.getByText("Official handoff", { exact: true });
-  const officialLookupButton = page.getByRole("button", {
-    name: /Use official lookup/i,
-  });
-
-  await recorder.clearAndType(input, "D04", 160, 1350);
-  await routingKeyMatch.waitFor({ state: "visible" });
-  await autoAppliedHint.waitFor({ state: "visible" });
-  await recorder.hold(700);
-
-  await recorder.wheel(760, 8, 180);
+  await recorder.wheel(760, 8, 160);
   await mapTitle.scrollIntoViewIfNeeded();
-  await recorder.hold(900);
+  await recorder.hold(520);
+  await recorder.wheel(220, 4, 150);
+  await recorder.hold(520);
 
-  const hoverTargetIndex = await page.evaluate(() => {
-    const paths = Array.from(document.querySelectorAll("svg path"));
-    const minimumArea = 1800;
-    const verticalPadding = 120;
-
-    const visibleTarget = paths.findIndex((path) => {
-      const rect = path.getBoundingClientRect();
-      return (
-        rect.width * rect.height >= minimumArea &&
-        rect.top >= verticalPadding &&
-        rect.bottom <= window.innerHeight - verticalPadding
+  const previousSelection = await getSelectedConstituencyTitle(page);
+  const targetBoundaryIndex = await page.evaluate(() => {
+    const visiblePaths = Array.from(document.querySelectorAll("svg path"))
+      .map((path, index) => {
+        const rect = path.getBoundingClientRect();
+        return {
+          area: rect.width * rect.height,
+          bottom: rect.bottom,
+          fill: path.getAttribute("fill"),
+          index,
+          top: rect.top,
+        };
+      })
+      .filter(
+        (entry) =>
+          entry.area >= 1800 &&
+          entry.top >= 120 &&
+          entry.bottom <= window.innerHeight - 120
       );
-    });
 
-    return visibleTarget >= 0 ? visibleTarget : 0;
+    if (!visiblePaths.length) {
+      return 0;
+    }
+
+    const fillFrequency = visiblePaths.reduce((accumulator, entry) => {
+      accumulator[entry.fill] = (accumulator[entry.fill] || 0) + 1;
+      return accumulator;
+    }, {});
+    const baselineFill = Object.entries(fillFrequency).sort((left, right) => right[1] - left[1])[0]?.[0];
+    const sortedCandidates = visiblePaths
+      .filter((entry) => !baselineFill || entry.fill === baselineFill)
+      .sort((left, right) => right.area - left.area);
+
+    return (sortedCandidates[0] || visiblePaths[0]).index;
   });
 
-  await page.locator("svg path").nth(hoverTargetIndex).hover();
-  await page.getByText("Hovered constituency").waitFor({ state: "visible" });
-  await recorder.hold(1100);
+  const targetBoundary = page.locator("svg path").nth(targetBoundaryIndex);
+  const boundaryBox = await targetBoundary.boundingBox();
+  if (!boundaryBox) {
+    throw new Error("Unable to identify a visible constituency boundary for README capture");
+  }
 
-  await recorder.wheel(-760, 8, 180);
-  await input.scrollIntoViewIfNeeded();
-  await recorder.hold(500);
-  await recorder.clearAndType(input, "12 Main Street Dublin", 90, 1450);
-  await officialHandoff.waitFor({ state: "visible" });
-  await officialLookupButton.waitFor({ state: "visible" });
-  await recorder.hold(1200);
+  await page.mouse.move(boundaryBox.x + boundaryBox.width / 2, boundaryBox.y + boundaryBox.height / 2);
+  await recorder.hold(220);
+  await page.mouse.click(
+    boundaryBox.x + boundaryBox.width / 2,
+    boundaryBox.y + boundaryBox.height / 2
+  );
+
+  await page.waitForFunction(
+    (currentSelection) => {
+      const eyebrow = Array.from(document.querySelectorAll("*")).find(
+        (element) => {
+          const text = (element.textContent || "").trim();
+          return text === "Selected constituency" || text === "Hovered constituency";
+        }
+      );
+      if (!eyebrow?.parentElement) {
+        return false;
+      }
+      const textNodes = Array.from(eyebrow.parentElement.children)
+        .map((element) => (element.textContent || "").trim())
+        .filter(Boolean);
+      return Boolean(textNodes[1] && textNodes[1] !== currentSelection);
+    },
+    previousSelection,
+    { timeout: 15000 }
+  );
+  await recorder.hold(1400);
 }
 
 async function captureProfileFlow(page, recorder, baseUrl) {

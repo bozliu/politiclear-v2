@@ -8,17 +8,17 @@ This repo is the 2026 continuation of the 2024 Hack Trinity prototype from [Para
 
 All three captures below were recorded from the canonical public release at [https://skill-deploy-017ji4k0pl.vercel.app](https://skill-deploy-017ji4k0pl.vercel.app), not from localhost.
 
-### Build a shortlist before you decide
+### Compare four local profiles in one full issue matrix
 
 ![Politiclear compare flow](./docs/readme-assets/compare-flow.gif)
 
-Build a local shortlist, keep the selected profiles visible, and open a side-by-side issue matrix with linked evidence and explicit unknowns.
+Build a four-profile shortlist and scroll the full issue matrix from Housing to Governance with linked evidence and explicit unknowns still left visible.
 
-### See the live constituency boundary, not just a search result
+### Click a real constituency boundary and watch the local brief change
 
 ![Politiclear lookup and live map flow](./docs/readme-assets/lookup-map-flow.gif)
 
-Search by routing-key Eircode, watch the live boundary update, and hand exact address checks to the official tool instead of pretending certainty.
+Click a live constituency boundary, watch the local brief respond in real time, and use the map as context instead of a decorative backdrop.
 
 ### Open the evidence trail behind a profile
 
