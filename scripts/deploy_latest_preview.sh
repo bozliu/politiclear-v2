@@ -32,14 +32,17 @@ fi
 
 CANONICAL_URL="$VERCEL_CANONICAL_URL"
 
-echo "Building latest preview bundle..." >&2
+echo "Checking Vercel project access..." >&2
+bash "$PROJECT_ROOT/scripts/ensure_vercel_link.sh" >&2
+
+echo "Preparing verified deployment bundle..." >&2
 if [ "${PREVIEW_SKIP_DATA_REFRESH:-0}" = "1" ]; then
+  echo "Reusing refreshed data artifacts from the current workspace." >&2
   npm --prefix "$PROJECT_ROOT" run verify:bundle >&2
 else
+  echo "Refreshing data before deployment." >&2
   npm --prefix "$PROJECT_ROOT" run prepare:data >&2
 fi
-
-bash "$PROJECT_ROOT/scripts/ensure_vercel_link.sh" >&2
 
 echo "Building verified Vercel output locally..." >&2
 (cd "$PROJECT_ROOT" && npx vercel build --prod --yes --token "$VERCEL_TOKEN") >&2

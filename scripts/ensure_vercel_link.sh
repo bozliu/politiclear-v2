@@ -17,6 +17,11 @@ EOF
   exit 1
 fi
 
+if [ -n "${VERCEL_PROJECT_ID:-}" ] && [ -n "${VERCEL_ORG_ID:-}" ]; then
+  node "$PROJECT_ROOT/scripts/materialize_vercel_project.mjs" >&2
+  exit 0
+fi
+
 if [ -f "$PROJECT_FILE" ] && grep -q "\"projectId\"" "$PROJECT_FILE"; then
   EXISTING_PROJECT_SLUG="$(python3 - <<'PY'
 import json
@@ -34,9 +39,13 @@ fi
 
 if [ -z "${VERCEL_PROJECT_SLUG:-}" ] || [ -z "${VERCEL_SCOPE_SLUG:-}" ]; then
   cat >&2 <<'EOF'
-VERCEL_PROJECT_SLUG and VERCEL_SCOPE_SLUG are required.
+Either VERCEL_PROJECT_ID and VERCEL_ORG_ID, or VERCEL_PROJECT_SLUG and VERCEL_SCOPE_SLUG, are required.
 
 Example:
+  export VERCEL_PROJECT_ID="prj_..."
+  export VERCEL_ORG_ID="team_..."
+
+Fallback legacy example:
   export VERCEL_PROJECT_SLUG="your-vercel-project-slug"
   export VERCEL_SCOPE_SLUG="your-vercel-team-or-user"
 EOF
