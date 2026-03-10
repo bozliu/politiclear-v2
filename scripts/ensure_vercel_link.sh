@@ -23,11 +23,12 @@ if [ -n "${VERCEL_PROJECT_ID:-}" ] && [ -n "${VERCEL_ORG_ID:-}" ]; then
 fi
 
 if [ -f "$PROJECT_FILE" ] && grep -q "\"projectId\"" "$PROJECT_FILE"; then
-  EXISTING_PROJECT_SLUG="$(python3 - <<'PY'
+  EXISTING_PROJECT_SLUG="$(PROJECT_FILE="$PROJECT_FILE" python3 - <<'PY'
 import json
+import os
 from pathlib import Path
 
-payload = json.loads(Path(".vercel/project.json").read_text(encoding="utf-8"))
+payload = json.loads(Path(os.environ["PROJECT_FILE"]).read_text(encoding="utf-8"))
 print(payload.get("projectName") or "")
 PY
 )"
