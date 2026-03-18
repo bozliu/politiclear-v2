@@ -16,4 +16,3 @@ This 2026 `v2` repo is the continuation prepared by Boz Liu on top of the origin
 
 - Credit the 2024 version as the original hackathon prototype.
 - Credit the 2026 version as the evidence-first civic continuation and public release.
-- Do not treat public source visibility as an open-source license grant for the combined codebase.

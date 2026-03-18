@@ -193,9 +193,9 @@ The canonical validation targets the `live` release path. Use the `deploy:previe
 - Use the in-app "Report an Issue" entry point for source-trail problems and civic-data corrections.
 - See [FEEDBACK.md](./FEEDBACK.md) for the reporting guide.
 
-## Rights and Release Strategy
+## License
 
-- This repo is public for inspection, feedback, and release transparency.
-- No open-source license is granted here yet; rights remain reserved unless separately granted in writing.
-- Separate commercial licensing may be offered by Boz Liu for approved use cases.
-- See [CREDITS.md](./CREDITS.md) for project attribution and [COMMERCIAL-LICENSE.md](./COMMERCIAL-LICENSE.md) for the planned commercial-use position.
+This repository is licensed under the Apache License 2.0.
+
+- See [LICENSE](./LICENSE) for the full license text.
+- See [CREDITS.md](./CREDITS.md) for project attribution and repo history.
