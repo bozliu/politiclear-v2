@@ -339,6 +339,23 @@ def make_source(label, url, note, source_type="official"):
     }
 
 
+def is_current_dail_membership(membership, on_date=TODAY):
+    house = membership.get("house", {})
+    if house.get("houseCode") != "dail" or str(house.get("houseNo")) != CURRENT_DAIL_NO:
+        return False
+
+    date_range = membership.get("dateRange") or {}
+    start_date = clean_text(date_range.get("start"))
+    end_date = clean_text(date_range.get("end"))
+
+    if start_date and start_date > on_date:
+        return False
+    if end_date and end_date < on_date:
+        return False
+
+    return True
+
+
 def dedupe_sources(sources):
     deduped = {}
     for source in sources:
@@ -838,16 +855,7 @@ def fetch_current_dail_members():
             (
                 membership["membership"]
                 for membership in member.get("memberships", [])
-                if membership.get("membership", {})
-                .get("house", {})
-                .get("houseCode")
-                == "dail"
-                and str(
-                    membership.get("membership", {})
-                    .get("house", {})
-                    .get("houseNo")
-                )
-                == CURRENT_DAIL_NO
+                if is_current_dail_membership(membership.get("membership", {}))
             ),
             None,
         )

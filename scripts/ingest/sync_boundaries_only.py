@@ -3,10 +3,12 @@
 import json
 import math
 import re
-import tempfile
+import time
 import unicodedata
+from http.client import IncompleteRead
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[2]
 BOOTSTRAP_PATH = ROOT / "data" / "generated" / "politiclear-cache.json"
@@ -36,6 +38,25 @@ def constituency_boundary_name(value):
 
 def normalize_constituency_name(value):
     return slugify(constituency_boundary_name(value))
+
+
+def fetch_json_with_retries(url, retries=3):
+    last_error = None
+
+    for attempt in range(retries):
+        try:
+            request = Request(
+                url,
+                headers={"User-Agent": "PoliticlearIngest/2.0"},
+            )
+            with urlopen(request, timeout=120) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except (IncompleteRead, TimeoutError, URLError, OSError, json.JSONDecodeError) as error:
+            last_error = error
+            if attempt < retries - 1:
+                time.sleep(1 + attempt)
+
+    raise RuntimeError(f"Failed to fetch JSON from {url}: {last_error}") from last_error
 
 
 def geometry_to_multipolygon(geometry):
@@ -99,7 +120,7 @@ def update_bbox(bbox, point):
 
 
 def build_boundary_lookup():
-    payload = json.loads(urlopen(OSI_CONSTITUENCY_GEOJSON_URL).read().decode("utf-8"))
+    payload = fetch_json_with_retries(OSI_CONSTITUENCY_GEOJSON_URL)
     grouped = {}
 
     for feature in payload.get("features", []):
