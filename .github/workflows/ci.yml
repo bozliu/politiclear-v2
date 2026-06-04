@@ -27,7 +27,7 @@ jobs:
           cache: npm
 
       - name: Set up Conda dl environment
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v4
         with:
           environment-file: environment.dl.yml
           activate-environment: dl
