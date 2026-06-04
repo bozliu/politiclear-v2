@@ -13,7 +13,7 @@ jobs:
       contents: read
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Poppler tools
         run: |
@@ -21,7 +21,7 @@ jobs:
           sudo apt-get install -y poppler-utils
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm

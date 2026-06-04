@@ -10,15 +10,25 @@ on:
         required: false
         default: true
         type: boolean
+      simulate_source_failure:
+        description: "Force a recoverable /members source failure for degraded-path verification"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   refresh-data:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      issues: write
+    outputs:
+      fresh: ${{ steps.refresh-status.outputs.fresh }}
+      should_deploy: ${{ steps.refresh-status.outputs.should_deploy }}
+      status: ${{ steps.refresh-status.outputs.status }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Poppler tools
         run: |
@@ -26,7 +36,7 @@ jobs:
           sudo apt-get install -y poppler-utils
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -50,33 +60,122 @@ jobs:
         run: conda run -n dl python -c "import requests, lxml, PIL; print('python deps ok')"
 
       - name: Refresh and verify official data bundle
+        env:
+          POLITICLEAR_SIMULATE_SOURCE_FAILURE: ${{ inputs.simulate_source_failure == true && 'members' || '' }}
         run: npm run prepare:data
+
+      - name: Read refresh status
+        id: refresh-status
+        run: |
+          if [ ! -f data/generated/politiclear-refresh-status.json ]; then
+            echo "Missing data/generated/politiclear-refresh-status.json" >&2
+            exit 1
+          fi
+          node <<'NODE' >> "$GITHUB_OUTPUT"
+          const fs = require('node:fs')
+          const status = JSON.parse(fs.readFileSync('data/generated/politiclear-refresh-status.json', 'utf8'))
+          const validStatuses = new Set(['synced', 'degraded'])
+          if (!validStatuses.has(status.status)) {
+            throw new Error(`Unexpected refresh status: ${status.status}`)
+          }
+          for (const key of ['fresh', 'shouldDeploy']) {
+            if (typeof status[key] !== 'boolean') {
+              throw new Error(`Refresh status ${key} must be boolean`)
+            }
+          }
+          console.log(`status=${status.status}`)
+          console.log(`fresh=${status.fresh ? 'true' : 'false'}`)
+          console.log(`should_deploy=${status.shouldDeploy ? 'true' : 'false'}`)
+          NODE
+
+      - name: Summarize refresh status
+        run: |
+          {
+            echo "### Daily refresh status"
+            node <<'NODE'
+          const fs = require('node:fs')
+          const status = JSON.parse(fs.readFileSync('data/generated/politiclear-refresh-status.json', 'utf8'))
+          console.log(`- status: ${status.status}`)
+          console.log(`- fresh: ${status.fresh}`)
+          console.log(`- shouldDeploy: ${status.shouldDeploy}`)
+          console.log(`- lastSuccessfulDataDate: ${status.lastSuccessfulDataDate ?? 'unknown'}`)
+          if (status.errorSummary) {
+            console.log(`- errorSummary: ${status.errorSummary}`)
+          }
+          NODE
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build web preview bundle
         run: npm run build:vercel
 
       - name: Upload refreshed artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: politiclear-refreshed-dist
           path: |
             data/generated
             dist
 
+      - name: Open or update degraded issue
+        if: steps.refresh-status.outputs.status == 'degraded'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_TITLE: Daily Politiclear Refresh degraded
+        run: |
+          issue_number="$(gh issue list --state open --json number,title --jq ".[] | select(.title == \"${ISSUE_TITLE}\") | .number" | head -n 1 || true)"
+          status_json="$(cat data/generated/politiclear-refresh-status.json)"
+          body="$(cat <<EOF
+          Daily Refresh degraded instead of failing red because an official source was temporarily unavailable.
+
+          Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          Commit: ${GITHUB_SHA}
+          Event: ${GITHUB_EVENT_NAME}
+
+          \`\`\`json
+          ${status_json}
+          \`\`\`
+          EOF
+          )"
+          if [ -n "${issue_number}" ]; then
+            gh issue comment "${issue_number}" --body "${body}"
+          else
+            gh issue create --title "${ISSUE_TITLE}" --body "${body}"
+          fi
+
+      - name: Close degraded issue after fresh refresh
+        if: steps.refresh-status.outputs.status == 'synced'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_TITLE: Daily Politiclear Refresh degraded
+        run: |
+          issue_number="$(gh issue list --state open --json number,title --jq ".[] | select(.title == \"${ISSUE_TITLE}\") | .number" | head -n 1 || true)"
+          if [ -z "${issue_number}" ]; then
+            exit 0
+          fi
+          body="Daily Refresh completed with fresh official data again.
+
+          Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          Commit: ${GITHUB_SHA}"
+          gh issue close "${issue_number}" --comment "${body}"
+
   deploy-refresh:
     needs: refresh-data
     runs-on: ubuntu-latest
     if: >
-      github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && inputs.deploy == true)
+      needs.refresh-data.outputs.fresh == 'true' &&
+      needs.refresh-data.outputs.should_deploy == 'true' &&
+      (
+        github.event_name == 'schedule' ||
+        (github.event_name == 'workflow_dispatch' && inputs.deploy == true)
+      )
     permissions:
       contents: read
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -107,7 +206,7 @@ jobs:
 
       - name: Download refreshed artifacts
         if: steps.vercel-config.outputs.should_deploy == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: politiclear-refreshed-dist
           path: refreshed-artifacts

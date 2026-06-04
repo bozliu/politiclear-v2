@@ -42,6 +42,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+data/generated/politiclear-refresh-status.json
 
 # typescript
 *.tsbuildinfo

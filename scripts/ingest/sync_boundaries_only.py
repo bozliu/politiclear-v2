@@ -12,6 +12,7 @@ from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[2]
 BOOTSTRAP_PATH = ROOT / "data" / "generated" / "politiclear-cache.json"
+REFRESH_STATUS_PATH = ROOT / "data" / "generated" / "politiclear-refresh-status.json"
 OSI_CONSTITUENCY_GEOJSON_URL = (
     "https://data-osi.opendata.arcgis.com/api/download/v1/items/"
     "a37ad6a3a6ff47e4a5a0ff313b418448/geojson?layers=0"
@@ -57,6 +58,30 @@ def fetch_json_with_retries(url, retries=3):
                 time.sleep(1 + attempt)
 
     raise RuntimeError(f"Failed to fetch JSON from {url}: {last_error}") from last_error
+
+
+def load_json_file(path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_json_file(path, payload):
+    path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def body_preview(value, limit=500):
+    compacted = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(compacted) <= limit:
+        return compacted
+    return f"{compacted[:limit]}..."
+
+
+def read_refresh_status():
+    if not REFRESH_STATUS_PATH.exists():
+        return None
+    return load_json_file(REFRESH_STATUS_PATH)
 
 
 def geometry_to_multipolygon(geometry):
@@ -181,8 +206,44 @@ def build_boundary_lookup():
 
 
 def main():
-    bootstrap = json.loads(BOOTSTRAP_PATH.read_text())
-    boundary_lookup = build_boundary_lookup()
+    refresh_status = read_refresh_status()
+    if refresh_status and refresh_status.get("status") == "degraded":
+        print(
+            json.dumps(
+                {
+                    "path": str(BOOTSTRAP_PATH),
+                    "skipped": True,
+                    "reason": "refresh already degraded; keeping last-known-good boundaries",
+                    "updatedConstituencies": 0,
+                },
+                indent=2,
+            )
+        )
+        return
+
+    bootstrap = load_json_file(BOOTSTRAP_PATH)
+    try:
+        boundary_lookup = build_boundary_lookup()
+    except RuntimeError as error:
+        if refresh_status and refresh_status.get("status") == "synced":
+            print(
+                json.dumps(
+                    {
+                        "path": str(BOOTSTRAP_PATH),
+                        "skipped": True,
+                        "reason": (
+                            "boundary-only refresh failed after primary ingest "
+                            "already produced a fresh bundle"
+                        ),
+                        "errorSummary": body_preview(error),
+                        "updatedConstituencies": 0,
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            )
+            return
+        raise
 
     updated = 0
     for constituency in bootstrap.get("constituencies", []):
@@ -195,7 +256,7 @@ def main():
         constituency["mapLabelPoint"] = boundary["mapLabelPoint"]
         updated += 1
 
-    BOOTSTRAP_PATH.write_text(json.dumps(bootstrap, indent=2))
+    write_json_file(BOOTSTRAP_PATH, bootstrap)
     print(json.dumps({"updatedConstituencies": updated, "path": str(BOOTSTRAP_PATH)}, indent=2))
 
 

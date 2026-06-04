@@ -2,6 +2,7 @@
 
 import html
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -20,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_DIR = ROOT / "data" / "generated"
 BOOTSTRAP_PATH = OUTPUT_DIR / "politiclear-cache.json"
 DETAILS_PATH = OUTPUT_DIR / "politiclear-evidence.json"
+REFRESH_STATUS_PATH = OUTPUT_DIR / "politiclear-refresh-status.json"
 PORTRAITS_DIR = OUTPUT_DIR / "portraits"
 PORTRAIT_REPORT_PATH = OUTPUT_DIR / "politiclear-portrait-report.json"
 
@@ -40,6 +42,11 @@ PROFILE_URL_TEMPLATE = "https://www.oireachtas.ie/en/members/member/{}"
 IMAGE_URL_TEMPLATE = (
     "https://data.oireachtas.ie/ie/oireachtas/member/id/{}/image/large"
 )
+SIMULATED_SOURCE_FAILURES = {
+    item.strip().lower()
+    for item in os.environ.get("POLITICLEAR_SIMULATE_SOURCE_FAILURE", "").split(",")
+    if item.strip()
+}
 
 UNKNOWN_STANCE = "No verified source yet"
 UNKNOWN_SUMMARY = (
@@ -201,81 +208,220 @@ ISSUE_BRIEF_TOPICS = {
 }
 
 
-def curl_text(url, retries=3):
-    last_error = None
+class ExternalDataFetchError(RuntimeError):
+    """Recoverable failure from an external official source."""
+
+
+def body_preview(value, limit=180):
+    compacted = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(compacted) <= limit:
+        return compacted
+    return f"{compacted[:limit]}..."
+
+
+def byte_length(value):
+    return len((value or "").encode("utf-8", errors="replace"))
+
+
+def describe_fetch_failure(
+    url,
+    *,
+    body="",
+    http_status=None,
+    message=None,
+    return_code=None,
+    stderr="",
+):
+    parts = [f"endpoint={url}"]
+    if http_status is not None:
+        parts.append(f"http_status={http_status}")
+    parts.append(f"body_bytes={byte_length(body)}")
+    if return_code is not None:
+        parts.append(f"curl_exit={return_code}")
+    if message:
+        parts.append(f"error={message}")
+    stderr_preview = body_preview(stderr)
+    if stderr_preview:
+        parts.append(f"stderr={stderr_preview}")
+    response_preview = body_preview(body)
+    if response_preview:
+        parts.append(f"body_preview={response_preview}")
+    return "; ".join(parts)
+
+
+def split_curl_stdout(stdout):
+    body, separator, http_status = (stdout or "").rpartition("\n")
+    if separator and http_status.strip().isdigit():
+        return body, http_status.strip()
+    return stdout or "", None
+
+
+def is_success_status(http_status):
+    return bool(http_status and http_status.isdigit() and 200 <= int(http_status) < 300)
+
+
+def sleep_before_retry(attempt):
+    time.sleep(min(30, 2**attempt))
+
+
+def should_simulate_json_failure(url):
+    if not SIMULATED_SOURCE_FAILURES:
+        return False
+    if "all" in SIMULATED_SOURCE_FAILURES:
+        return True
+    return (
+        "members" in SIMULATED_SOURCE_FAILURES
+        and url.startswith(f"{OIREACHTAS_API_BASE}/members")
+    )
+
+
+def curl_text(url, retries=3, timeout=45):
+    last_error_summary = None
 
     for attempt in range(retries):
-        try:
-            result = subprocess.run(
-                [
-                    "curl",
-                    "-L",
-                    "--silent",
-                    "--show-error",
-                    "--max-time",
-                    "45",
-                    "--retry",
-                    "2",
-                    "--retry-delay",
-                    "1",
-                    "--user-agent",
-                    "PoliticlearIngest/2.0",
-                    url,
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            return result.stdout
-        except subprocess.CalledProcessError as error:
-            last_error = error
-            if attempt < retries - 1:
-                time.sleep(1 + attempt)
-
-    raise RuntimeError(f"Failed to fetch {url}: {last_error}")
-
-
-def curl_json(url, retries=3):
-    return json.loads(curl_text(url, retries=retries))
-
-
-def curl_file(url, destination, retries=3, referer=None, accept=None):
-    last_error = None
-
-    for attempt in range(retries):
-        try:
-            command = [
+        result = subprocess.run(
+            [
                 "curl",
                 "-L",
                 "--silent",
                 "--show-error",
                 "--max-time",
-                "120",
-                "--retry",
-                "2",
-                "--retry-delay",
-                "1",
+                str(timeout),
+                "--connect-timeout",
+                "15",
                 "--user-agent",
                 "PoliticlearIngest/2.0",
-            ]
-            if referer:
-                command.extend(["--referer", referer])
-            if accept:
-                command.extend(["-H", f"Accept: {accept}"])
-            command.extend([url, "-o", str(destination)])
-            subprocess.run(
-                command,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            return
-        except subprocess.CalledProcessError as error:
-            last_error = error
-            if attempt < retries - 1:
-                time.sleep(1 + attempt)
+                "--write-out",
+                "\n%{http_code}",
+                url,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        body, http_status = split_curl_stdout(result.stdout)
+        if result.returncode == 0 and is_success_status(http_status):
+            return body
 
-    raise RuntimeError(f"Failed to fetch {url}: {last_error}")
+        last_error_summary = describe_fetch_failure(
+            url,
+            body=body,
+            http_status=http_status,
+            return_code=result.returncode,
+            stderr=result.stderr,
+        )
+        print(
+            f"Fetch failed ({attempt + 1}/{retries}): {last_error_summary}",
+            flush=True,
+        )
+        if attempt < retries - 1:
+            sleep_before_retry(attempt)
+
+    raise ExternalDataFetchError(
+        f"Failed to fetch text after {retries} attempts: {last_error_summary}"
+    )
+
+
+def curl_json(url, retries=4):
+    if should_simulate_json_failure(url):
+        raise ExternalDataFetchError(
+            describe_fetch_failure(
+                url,
+                http_status="simulated",
+                message="POLITICLEAR_SIMULATE_SOURCE_FAILURE forced JSON failure",
+            )
+        )
+
+    last_error_summary = None
+    for attempt in range(retries):
+        try:
+            text = curl_text(url, retries=1)
+        except ExternalDataFetchError as error:
+            last_error_summary = str(error)
+        else:
+            if not text.strip():
+                last_error_summary = describe_fetch_failure(
+                    url,
+                    body=text,
+                    http_status="2xx",
+                    message="empty JSON response",
+                )
+            else:
+                try:
+                    return json.loads(text)
+                except json.JSONDecodeError as error:
+                    last_error_summary = describe_fetch_failure(
+                        url,
+                        body=text,
+                        http_status="2xx",
+                        message=(
+                            "JSONDecodeError: "
+                            f"{error.msg} at line {error.lineno} column {error.colno}"
+                        ),
+                    )
+
+        print(
+            f"JSON fetch failed ({attempt + 1}/{retries}): {last_error_summary}",
+            flush=True,
+        )
+        if attempt < retries - 1:
+            sleep_before_retry(attempt)
+
+    raise ExternalDataFetchError(
+        f"Failed to fetch JSON after {retries} attempts: {last_error_summary}"
+    )
+
+
+def curl_file(url, destination, retries=3, referer=None, accept=None):
+    last_error_summary = None
+
+    for attempt in range(retries):
+        command = [
+            "curl",
+            "-L",
+            "--silent",
+            "--show-error",
+            "--max-time",
+            "120",
+            "--connect-timeout",
+            "15",
+            "--user-agent",
+            "PoliticlearIngest/2.0",
+            "--write-out",
+            "%{http_code}",
+        ]
+        if referer:
+            command.extend(["--referer", referer])
+        if accept:
+            command.extend(["-H", f"Accept: {accept}"])
+        command.extend([url, "-o", str(destination)])
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        http_status = result.stdout.strip() or None
+        if result.returncode == 0 and is_success_status(http_status):
+            return
+
+        last_error_summary = describe_fetch_failure(
+            url,
+            body="",
+            http_status=http_status,
+            return_code=result.returncode,
+            stderr=result.stderr,
+        )
+        print(
+            f"File fetch failed ({attempt + 1}/{retries}): {last_error_summary}",
+            flush=True,
+        )
+        if attempt < retries - 1:
+            sleep_before_retry(attempt)
+
+    raise ExternalDataFetchError(
+        f"Failed to fetch file after {retries} attempts: {last_error_summary}"
+    )
 
 
 def api_get(path, **params):
@@ -2292,17 +2438,115 @@ def build_datasets():
     return bootstrap_dataset, evidence_dataset
 
 
+def summarize_refresh_error(error):
+    return body_preview(error, limit=500) or "Official source refresh failed"
+
+
+def write_refresh_status(
+    *,
+    status,
+    fresh,
+    error_summary,
+    last_successful_data_date,
+    should_deploy,
+):
+    payload = {
+        "status": status,
+        "fresh": bool(fresh),
+        "errorSummary": error_summary,
+        "lastSuccessfulDataDate": last_successful_data_date,
+        "shouldDeploy": bool(should_deploy),
+    }
+    REFRESH_STATUS_PATH.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return payload
+
+
+def load_json_file(path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as error:
+        raise RuntimeError(
+            f"Cannot use degraded fallback because {path} does not exist"
+        ) from error
+    except json.JSONDecodeError as error:
+        raise RuntimeError(
+            f"Cannot use degraded fallback because {path} is not valid JSON: {error}"
+        ) from error
+
+
+def mark_dataset_degraded(dataset, error_summary):
+    meta = dataset.setdefault("meta", {})
+    meta["fallbackMode"] = "last-known-good-official-snapshot"
+    meta["lastRefreshAttemptedAt"] = NOW
+    meta["refreshErrorSummary"] = error_summary
+    meta["syncStatus"] = "degraded"
+
+
+def write_degraded_bundle(error):
+    error_summary = summarize_refresh_error(error)
+    bootstrap_dataset = load_json_file(BOOTSTRAP_PATH)
+    evidence_dataset = load_json_file(DETAILS_PATH)
+
+    mark_dataset_degraded(bootstrap_dataset, error_summary)
+    mark_dataset_degraded(evidence_dataset, error_summary)
+
+    BOOTSTRAP_PATH.write_text(
+        json.dumps(bootstrap_dataset, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    DETAILS_PATH.write_text(
+        json.dumps(evidence_dataset, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    status_payload = write_refresh_status(
+        status="degraded",
+        fresh=False,
+        error_summary=error_summary,
+        last_successful_data_date=bootstrap_dataset.get("meta", {}).get("lastUpdated"),
+        should_deploy=False,
+    )
+
+    print(
+        json.dumps(
+            {
+                "bootstrapOutput": str(BOOTSTRAP_PATH),
+                "detailOutput": str(DETAILS_PATH),
+                "refreshStatusOutput": str(REFRESH_STATUS_PATH),
+                **status_payload,
+            },
+            ensure_ascii=False,
+        )
+    )
+
+
 def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     PORTRAITS_DIR.mkdir(parents=True, exist_ok=True)
-    bootstrap_dataset, evidence_dataset = build_datasets()
+    try:
+        bootstrap_dataset, evidence_dataset = build_datasets()
+    except ExternalDataFetchError as error:
+        write_degraded_bundle(error)
+        return
+
     portrait_report = json.loads(PORTRAIT_REPORT_PATH.read_text(encoding="utf-8"))
 
     BOOTSTRAP_PATH.write_text(
-        json.dumps(bootstrap_dataset, indent=2, ensure_ascii=False) + "\n"
+        json.dumps(bootstrap_dataset, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
     )
     DETAILS_PATH.write_text(
-        json.dumps(evidence_dataset, indent=2, ensure_ascii=False) + "\n"
+        json.dumps(evidence_dataset, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    status_payload = write_refresh_status(
+        status="synced",
+        fresh=True,
+        error_summary=None,
+        last_successful_data_date=bootstrap_dataset["meta"]["lastUpdated"],
+        should_deploy=True,
     )
 
     evidence_backed = sum(
@@ -2323,7 +2567,9 @@ def main():
                 "generatedAt": bootstrap_dataset["meta"]["generatedAt"],
                 "portraitCount": len(list(PORTRAITS_DIR.glob("*.jpg"))),
                 "portraitReportOutput": str(PORTRAIT_REPORT_PATH),
+                "refreshStatusOutput": str(REFRESH_STATUS_PATH),
                 "resolvedPortraitCount": portrait_report["resolvedCount"],
+                **status_payload,
                 "unresolvedPortraitCount": portrait_report["unresolvedCount"],
             },
             ensure_ascii=False,
